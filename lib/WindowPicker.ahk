@@ -10,7 +10,11 @@ class WindowPicker {
         this.timerFn := ""
         this.callback := ""
         this.lButtonFn := ""
+        this.enterFn := ""
+        this.numpadEnterFn := ""
         this.escapeFn := ""
+        this.hoveredHwnd := 0
+        this.lastLButtonDown := false
     }
 
     ; ===== 开始窗口选择模式 =====
@@ -20,6 +24,8 @@ class WindowPicker {
             return
         this.callback := callback
         this.picking := true
+        this.hoveredHwnd := 0
+        this.lastLButtonDown := false
 
         ; 鼠标光标改为十字瞄准镜：加载 IDC_CROSS(32515)，替换普通箭头 OCR_NORMAL(32512)
         hCursor := DllCall("LoadCursor", "ptr", 0, "ptr", 32515, "ptr")
@@ -31,9 +37,13 @@ class WindowPicker {
 
         ; 注册临时热键：左键确认选中、ESC 取消（用 Bind 确保回调能访问到 this）
         this.lButtonFn := this.OnLButton.Bind(this)
+        this.enterFn := this.OnEnter.Bind(this)
+        this.numpadEnterFn := this.OnEnter.Bind(this)
         this.escapeFn := this.OnEscape.Bind(this)
-        Hotkey "*LButton", this.lButtonFn
-        Hotkey "Escape", this.escapeFn
+        Hotkey "*LButton", this.lButtonFn, "On"
+        Hotkey "Enter", this.enterFn, "On"
+        Hotkey "NumpadEnter", this.numpadEnterFn, "On"
+        Hotkey "Escape", this.escapeFn, "On"
     }
 
     ; ===== 结束窗口选择模式 =====
@@ -48,6 +58,8 @@ class WindowPicker {
 
         ; 注销临时热键
         Hotkey "*LButton", "Off"
+        Hotkey "Enter", "Off"
+        Hotkey "NumpadEnter", "Off"
         Hotkey "Escape", "Off"
 
         ; 恢复系统默认光标（SPI_SETCURSORS=0x0057）
@@ -55,39 +67,86 @@ class WindowPicker {
 
         ; 清除 ToolTip
         ToolTip
+        this.hoveredHwnd := 0
+        this.lastLButtonDown := false
     }
 
     ; ===== 定时器回调：更新瞄准提示 =====
     PickTimer() {
-        MouseGetPos(&mx, &my, &mhwnd, &mcontrol)
-        if mhwnd {
-            title := WinGetTitle("ahk_id " mhwnd)
-            exeName := WinGetProcessName("ahk_id " mhwnd)
-            ToolTip "瞄准中: " title " (" exeName ")"
+        hwnd := this.ResolveHoveredWindow()
+        this.hoveredHwnd := hwnd
+        if hwnd {
+            title := WinGetTitle("ahk_id " hwnd)
+            exeName := WinGetProcessName("ahk_id " hwnd)
+            ToolTip "瞄准中: " title " (" exeName ")`n左键或回车确认，ESC 取消"
         } else {
-            ToolTip "瞄准中: (未指向窗口)"
+            ToolTip "瞄准中: (未指向窗口)`n左键或回车确认，ESC 取消"
         }
+        this.CheckPollingConfirm()
     }
 
     ; ===== 左键热键回调：确认选中窗口 =====
     OnLButton(*) {
         if !this.picking
             return
-        MouseGetPos(&mx, &my, &mhwnd, &mcontrol)
-        if !mhwnd
+        this.SelectHoveredWindow()
+    }
+
+    OnEnter(*) {
+        if !this.picking
             return
-        ; 获取窗口信息：标题、进程名、客户区宽高
-        title := WinGetTitle("ahk_id " mhwnd)
-        exeName := WinGetProcessName("ahk_id " mhwnd)
-        WinGetClientPos(&cx, &cy, &cw, &ch, "ahk_id " mhwnd)
-        ; 回调返回窗口信息，然后结束选择模式
-        if this.callback
-            this.callback.Call(mhwnd, exeName, title, cw, ch)
-        this.Stop()
+        this.SelectHoveredWindow()
     }
 
     ; ===== ESC 热键回调：取消选择 =====
     OnEscape(*) {
         this.Stop()
+    }
+
+    ResolveHoveredWindow() {
+        MouseGetPos(&mx, &my, &mhwnd)
+        if mhwnd
+            return this.NormalizeRootWindow(mhwnd)
+
+        pt := Buffer(8, 0)
+        if !DllCall("GetCursorPos", "Ptr", pt.Ptr)
+            return 0
+        rawHwnd := DllCall("WindowFromPoint", "Int64", NumGet(pt, 0, "Int64"), "Ptr")
+        if !rawHwnd
+            return 0
+        return this.NormalizeRootWindow(rawHwnd)
+    }
+
+    NormalizeRootWindow(hwnd) {
+        if !hwnd
+            return 0
+        rootHwnd := DllCall("GetAncestor", "Ptr", hwnd, "UInt", 2, "Ptr")
+        return rootHwnd ? rootHwnd : hwnd
+    }
+
+    SelectHoveredWindow() {
+        hwnd := this.ResolveHoveredWindow()
+        if !hwnd
+            return
+        this.hoveredHwnd := hwnd
+        title := WinGetTitle("ahk_id " hwnd)
+        exeName := WinGetProcessName("ahk_id " hwnd)
+        WinGetClientPos(&cx, &cy, &cw, &ch, "ahk_id " hwnd)
+        if this.callback
+            this.callback.Call(hwnd, exeName, title, cw, ch)
+        this.Stop()
+    }
+
+    CheckPollingConfirm() {
+        if !this.picking
+            return
+        currentDown := this.IsPhysicalLButtonDown()
+        if (currentDown && !this.lastLButtonDown)
+            this.SelectHoveredWindow()
+        this.lastLButtonDown := currentDown
+    }
+
+    IsPhysicalLButtonDown() {
+        return GetKeyState("LButton", "P")
     }
 }
