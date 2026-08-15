@@ -1,1 +1,0 @@
-﻿{"name":"111","steps":[{"image":"doubao.bmp","region":{"x1":110,"x2":854,"y1":178,"y2":295},"timeout":10000,"type":"findPic"},{"button":"L","delay":4469,"type":"click","x":394,"y":238},{"button":"L","delay":3688,"type":"click","x":237,"y":237}],"targetMapImage":"","targetMapRegion":""}

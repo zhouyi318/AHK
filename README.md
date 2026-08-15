@@ -25,6 +25,7 @@ Main.ahk                    主程序入口
 config/config.ini           主配置文件
 assets/                     模板图资源
 lib/                        AHK 模块与 OCR 辅助脚本
+docs/reference/             AHK v2 本地 API 与规则参考
 scripts/                    录制得到的步骤脚本
 tests/                      回归测试
 tools/setup_rapidocr_runtime.ps1
@@ -32,6 +33,16 @@ tools/setup_rapidocr_runtime.ps1
 tools/validate_setup.ps1    新机器环境校验
 tools/rapidocr/             自带 Python、模型与 OCR 依赖
 ```
+
+## AHK v2 本地参考
+
+为了后续在这个仓库里更准确地编写 AHK v2 代码，项目内已补充本地参考文档：
+
+- `docs/reference/ahk-v2-api.md`：当前仓库高频 AHK v2 API 速查
+- `docs/reference/ahk-v2-rules.md`：语法规则、易错点与项目约定
+- `docs/reference/ahk-v2-templates.md`：按项目高频场景整理的可复制模板库
+
+建议每次改 `.ahk` 文件前先看 `docs/reference/ahk-v2-rules.md`，再查对应 API，最后从模板库复制最接近的片段改造。
 
 ## 运行要求
 
