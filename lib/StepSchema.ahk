@@ -21,6 +21,8 @@ class StepSchema {
                 return "等待"
             case "keypress":
                 return "按键"
+            case "mouse_action":
+                return "按住"
             case "mouse_move":
                 return "移动鼠标"
             case "mouse_wheel":
@@ -41,11 +43,13 @@ class StepSchema {
     static DefaultParams(type) {
         switch type {
             case "click":
-                return {x: 0, y: 0, button: "L", delay: 0}
+                return {x: 0, y: 0, button: "L", delay: 0, repeat: 1, intervalMs: 0}
             case "wait":
                 return {ms: 1000}
             case "keypress":
                 return {keyName: "", repeat: 1}
+            case "mouse_action":
+                return {x: 0, y: 0, button: "R", action: "hold", holdMs: 0, delay: 0}
             case "mouse_move":
                 return {x: 0, y: 0, speed: 0}
             case "mouse_wheel":

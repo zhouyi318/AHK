@@ -18,6 +18,10 @@ class ScriptEditor {
         this.flowPageControls := []
         this.settingsPageControls := []
         this.logPageControls := []
+        this.mouseRecording := false
+        this.botRunStateText := "当前状态：空闲"
+        this.defaultStatusContextText := "运行上下文`n当前流程、脚本、步骤会在后续状态同步中继续补全。"
+        this.statusContextText := this.defaultStatusContextText
     }
 
     Build() {
@@ -134,7 +138,7 @@ class ScriptEditor {
         this.txtWindowSummary := guiObj.Add("Text", Format("x{} y{} w{} h72", statusX + 12, statusY + 44, statusW - 24), "窗口: (未绑定)")
         this.txtRunState := guiObj.Add("Text", Format("x{} y{} w{} h24", statusX + 12, statusY + 124, statusW - 24), "当前状态：空闲")
         this.txtStatusHotkeys := guiObj.Add("Text", Format("x{} y{} w{} h38", statusX + 12, statusY + 156, statusW - 24), "热键`n开始/暂停 与 急停 由 config.ini 控制。")
-        this.txtStatusContext := guiObj.Add("Text", Format("x{} y{} w{} h56", statusX + 12, statusY + 202, statusW - 24), "运行上下文`n当前流程、脚本、步骤会在后续状态同步中继续补全。")
+        this.txtStatusContext := guiObj.Add("Text", Format("x{} y{} w{} h56", statusX + 12, statusY + 202, statusW - 24), this.defaultStatusContextText)
         this.txtStatusLogTitle := guiObj.Add("Text", Format("x{} y{} w{} h24 +0x200", statusX + 12, statusY + 268, statusW - 24), "最近日志")
         this.edtLog := guiObj.Add("Edit", Format("x{} y{} w{} h{} ReadOnly", statusX + 12, statusY + 298, statusW - 24, 500), "")
 
@@ -676,9 +680,21 @@ class ScriptEditor {
             this.txtWindowSummary.Text := text
     }
 
+    SetBotRunState(text) {
+        this.botRunStateText := text
+        if !this.mouseRecording
+            this.SetRunState(text)
+    }
+
     SetRunState(text) {
         if this.HasProp("txtRunState")
             this.txtRunState.Text := text
+    }
+
+    SetStatusContext(text) {
+        this.statusContextText := text
+        if this.HasProp("txtStatusContext")
+            this.txtStatusContext.Text := text
     }
 
     SetLogText(text) {
@@ -689,12 +705,49 @@ class ScriptEditor {
     }
 
     AppendStepObject(step) {
-        if !IsObject(this.currentScript) || !IsObject(step)
-            return false
-        this.currentScript.steps.Push(step)
+        return this.AppendStepObjects([step]) > 0
+    }
+
+    AppendStepObjects(steps) {
+        if !IsObject(this.currentScript) || !IsObject(steps)
+            return 0
+        appended := 0
+        for _, step in steps {
+            if !IsObject(step)
+                continue
+            this.currentScript.steps.Push(step)
+            appended += 1
+        }
+        if (appended = 0)
+            return 0
         this.selectedStepIndex := this.currentScript.steps.Length
         this.RefreshSteps()
-        return true
+        return appended
+    }
+
+    StartMouseRecording() {
+        if !(IsObject(this.currentScript) && this.deps.Has("recorders"))
+            return false
+        hwnd := this.GetBoundHwnd()
+        if !hwnd
+            return false
+        if this.mouseRecording
+            return this.StopMouseRecording()
+        if this.deps["recorders"].HasMethod("RecordMouseSequence") {
+            started := this.deps["recorders"].RecordMouseSequence(hwnd, ObjBindMethod(this, "OnRecordedStepsReady"))
+            if started
+                this.SetMouseRecordingState(true)
+            return started
+        }
+        return this.RecordNextClickStep()
+    }
+
+    StopMouseRecording() {
+        if !this.mouseRecording
+            return false
+        if !(this.deps.Has("recorders") && this.deps["recorders"].HasMethod("StopMouseSequence"))
+            return false
+        return this.deps["recorders"].StopMouseSequence()
     }
 
     RecordNextClickStep() {
@@ -719,6 +772,31 @@ class ScriptEditor {
 
     OnRecordedStepReady(step) {
         this.AppendStepObject(step)
+    }
+
+    OnRecordedStepsReady(steps) {
+        recordedCount := this.AppendStepObjects(steps)
+        this.SetMouseRecordingState(false, recordedCount)
+    }
+
+    SetMouseRecordingState(active, recordedCount := "") {
+        this.mouseRecording := active
+        if active {
+            this.SetRunState("当前状态：录制鼠标中")
+            this.SetStatusContext("录制上下文`n正在录制鼠标事件，点击“停止录制（ESC）”或按 ESC 结束录制。")
+            if this.HasProp("btnRecordClick")
+                this.btnRecordClick.Text := "停止录制（ESC）"
+            return
+        }
+        if this.HasProp("btnRecordClick")
+            this.btnRecordClick.Text := "录制点击"
+        if (recordedCount != "" && recordedCount is Number && recordedCount > 0) {
+            this.SetRunState("当前状态：已录制 " recordedCount " 个鼠标步骤")
+            this.SetStatusContext("录制上下文`n最近一次录制：已录制 " recordedCount " 个鼠标步骤，可继续录制或直接编辑参数。")
+            return
+        }
+        this.SetRunState(this.botRunStateText)
+        this.SetStatusContext(this.defaultStatusContextText)
     }
 
     ApplyStepEdits() {
@@ -847,7 +925,7 @@ class ScriptEditor {
             MsgBox("请先绑定窗口后再录制点击步骤。", "提示")
             return
         }
-        if !this.RecordNextClickStep()
+        if !this.StartMouseRecording()
             MsgBox("当前录制服务不可用。", "提示")
     }
 

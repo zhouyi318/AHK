@@ -7,6 +7,16 @@ if FileExist(statusPath)
     FileDelete(statusPath)
 
 try {
+    clickStep := StepSchema.CreateStep("click")
+    if !clickStep.params.HasProp("repeat")
+        throw Error("click should expose a repeat param for rapid clicks")
+    if !clickStep.params.HasProp("intervalMs")
+        throw Error("click should expose an intervalMs param for rapid clicks")
+    if (clickStep.params.repeat != 1)
+        throw Error("click should default repeat to 1")
+    if (clickStep.params.intervalMs != 0)
+        throw Error("click should default intervalMs to 0")
+
     step := StepSchema.CreateStep("ocr_match")
     if (step.type != "ocr_match")
         throw Error("CreateStep should preserve the requested step type")
@@ -30,6 +40,20 @@ try {
         throw Error("branch should expose a conditionType param")
     if !branchStep.params.HasProp("region")
         throw Error("branch should expose a region param")
+
+    mouseActionStep := StepSchema.CreateStep("mouse_action")
+    if (mouseActionStep.type != "mouse_action")
+        throw Error("CreateStep should support mouse_action steps")
+    if (mouseActionStep.name != "按住")
+        throw Error("mouse_action should use the default hold-step name")
+    if !mouseActionStep.params.HasProp("action")
+        throw Error("mouse_action should expose an action param")
+    if !mouseActionStep.params.HasProp("holdMs")
+        throw Error("mouse_action should expose a holdMs param")
+    if (mouseActionStep.params.action != "hold")
+        throw Error("mouse_action should default action to hold")
+    if (mouseActionStep.params.holdMs != 0)
+        throw Error("mouse_action should default holdMs to 0")
 
     script := {
         steps: [

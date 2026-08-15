@@ -285,7 +285,7 @@ HotkeyEmergencyStop(*) {
 
 ; 定时刷新运行界面：状态文本、按钮文案、日志窗口
 SyncRunUI() {
-    scriptEditorWorkspace.SetRunState("当前状态：" . StateText(botRunner.state))
+    scriptEditorWorkspace.SetBotRunState("当前状态：" . StateText(botRunner.state))
     if scriptEditorWorkspace.HasProp("btnRunBot")
         scriptEditorWorkspace.btnRunBot.Text := botRunner.IsRunning() ? "停止挂机" : "开始挂机"
     RefreshLog()

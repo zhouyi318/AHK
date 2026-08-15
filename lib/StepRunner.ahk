@@ -53,7 +53,16 @@ class StepRunner {
                 return this.player.DoClientClick(hwnd
                     , params.HasProp("x") ? params.x : 0
                     , params.HasProp("y") ? params.y : 0
-                    , params.HasProp("button") ? params.button : "L")
+                    , params.HasProp("button") ? params.button : "L"
+                    , params.HasProp("repeat") ? params.repeat : 1
+                    , params.HasProp("intervalMs") ? params.intervalMs : 0)
+            case "mouse_action":
+                return this.player.DoClientMouseAction(hwnd
+                    , params.HasProp("x") ? params.x : 0
+                    , params.HasProp("y") ? params.y : 0
+                    , params.HasProp("button") ? params.button : "R"
+                    , params.HasProp("action") ? params.action : "hold"
+                    , params.HasProp("holdMs") ? params.holdMs : 0)
             case "find_image":
                 return this.player.FindPic(
                     params.HasProp("image") ? params.image : "",
