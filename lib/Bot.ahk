@@ -15,10 +15,11 @@
 ;   异常(随时): HandleDisconnect / HandleDead → 回 CheckTown
 
 class Bot {
-    __New(cfg, logger, player, store) {
+    __New(cfg, logger, player, store, runner := "") {
         this.cfg := cfg
         this.log := logger
         this.player := player
+        this.runner := runner ? runner : player
         this.store := store
 
         this.running := false
@@ -132,7 +133,10 @@ class Bot {
 
     ; ===== 状态：轮换执行进图脚本 =====
     HandleRunEnterScript() {
-        scripts := this.store.ListScripts()
+        if this.HasCallable(this.store, "ListScriptsByType")
+            scripts := this.store.ListScriptsByType("enter_map")
+        else
+            scripts := this.store.ListScripts()
         if (scripts.Length = 0) {
             this.log.Warn("没有进图脚本，等待")
             this.SetState("CheckTown")
@@ -149,7 +153,10 @@ class Bot {
         }
         this.currentScript := script
         this.log.Info("执行进图脚本: " name)
-        this.player.Play(script.steps, this.hwnd)
+        if this.HasCallable(this.runner, "RunScript")
+            this.runner.RunScript(script, this.hwnd, 1)
+        else
+            this.player.Play(script.steps, this.hwnd)
         Sleep 1000
         this.SetState("VerifyMap")
     }
@@ -233,6 +240,16 @@ class Bot {
     ; ===== 状态：存装备（识别装备名图+右键存远程仓）=====
     HandleStoreItems() {
         storeCfg := this.store.LoadStoreConfig()
+        if (storeCfg.HasProp("flowScriptName") && storeCfg.flowScriptName != "" && this.HasCallable(this.runner, "RunScript")) {
+            flowScript := this.store.LoadScript(storeCfg.flowScriptName)
+            if (flowScript && flowScript.HasProp("steps")) {
+                this.log.Info("执行存仓流程脚本: " . storeCfg.flowScriptName)
+                this.runner.RunScript(flowScript, this.hwnd, 1)
+                this.lastStoreTime := A_TickCount
+                this.SetState("Monitoring")
+                return
+            }
+        }
         itemNames := storeCfg.itemNames
         if (itemNames.Length = 0) {
             this.log.Info("无存仓装备配置，跳过")
@@ -315,5 +332,14 @@ class Bot {
         if !this.cfg.HasProp("ImageRegions")
             return ""
         return this.cfg.ImageRegions.%imgKey%
+    }
+
+    HasCallable(obj, name) {
+        try {
+            fn := obj.%name%
+            return IsObject(fn)
+        } catch {
+            return false
+        }
     }
 }

@@ -1,0 +1,55 @@
+#Requires AutoHotkey v2.0
+
+#Include ..\lib\StepSchema.ahk
+
+statusPath := A_ScriptDir "\tmp_step_schema_result.txt"
+if FileExist(statusPath)
+    FileDelete(statusPath)
+
+try {
+    step := StepSchema.CreateStep("ocr_match")
+    if (step.type != "ocr_match")
+        throw Error("CreateStep should preserve the requested step type")
+    if (step.name = "")
+        throw Error("CreateStep should generate a default step name")
+    if !step.enabled
+        throw Error("CreateStep should default enabled to true")
+    if (step.onSuccess.action != "next")
+        throw Error("CreateStep should default success action to next")
+    if (step.onFailure.action != "stop")
+        throw Error("CreateStep should default failure action to stop")
+    if !step.HasProp("params")
+        throw Error("CreateStep should initialize params")
+    if !step.params.HasProp("region")
+        throw Error("ocr_match should expose a default region param")
+
+    branchStep := StepSchema.CreateStep("branch")
+    if (branchStep.type != "branch")
+        throw Error("CreateStep should support branch steps")
+    if !branchStep.params.HasProp("conditionType")
+        throw Error("branch should expose a conditionType param")
+    if !branchStep.params.HasProp("region")
+        throw Error("branch should expose a region param")
+
+    script := {
+        steps: [
+            {id: "step_1", type: "wait", name: "等待", enabled: true, params: {ms: 1000}, onSuccess: {action: "next"}, onFailure: {action: "stop"}},
+            {id: "step_2", type: "ocr_match", name: "识别文字", enabled: true, params: {targetText: "开始"}, onSuccess: {action: "jump", targetStepId: "step_1"}, onFailure: {action: "jump", targetStepId: "missing"}}
+        ]
+    }
+
+    err := StepSchema.ValidateJumpTargets(script)
+    if !InStr(err, "missing")
+        throw Error("ValidateJumpTargets should report missing jump targets")
+
+    script.steps[2].onFailure := {action: "stop"}
+    err := StepSchema.ValidateJumpTargets(script)
+    if (err != "")
+        throw Error("ValidateJumpTargets should allow valid jump targets")
+
+    FileAppend("PASS", statusPath, "UTF-8")
+    ExitApp(0)
+} catch as err {
+    FileAppend("FAIL: " err.Message, statusPath, "UTF-8")
+    ExitApp(1)
+}
