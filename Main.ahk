@@ -185,6 +185,8 @@ InitWindowState() {
 ; ====================================================================
 
 BtnPickWindow(*) {
+    if !EnsureAdminForWindowBinding()
+        return
     appLogger.Info("开始选择游戏窗口")
     wp.Start(OnWindowPicked)
 }
@@ -195,6 +197,43 @@ OnWindowPicked(hwnd, exeName, title, w, h) {
     cfg.SaveWindow(exeName, title, hwnd, w, h)
     InitWindowState()
     appLogger.Info("已选择窗口: " . title . " (" . exeName . ") " . w . "x" . h)
+}
+
+EnsureAdminForWindowBinding() {
+    if A_IsAdmin
+        return true
+
+    result := MsgBox(
+        "当前脚本不是管理员权限运行。`n`n"
+        . "传奇私服等游戏窗口通常会以管理员权限启动，Windows UAC 会拦截当前脚本对这类窗口的选取确认，表现为浏览器能绑定、游戏窗口无法绑定。`n`n"
+        . "是否现在以管理员权限重新启动脚本？",
+        "需要管理员权限",
+        "YesNo Icon!"
+    )
+    if (result != "Yes")
+        return false
+    return RelaunchScriptAsAdmin()
+}
+
+RelaunchScriptAsAdmin() {
+    args := ""
+    for _, arg in A_Args
+        args .= " " QuoteCliArg(arg)
+    try {
+        Run('*RunAs "' A_AhkPath '" "' A_ScriptFullPath '"' args)
+        ExitApp()
+    } catch {
+        MsgBox(
+            "自动提升权限失败，请右键脚本或 AutoHotkey，选择“以管理员身份运行”后再绑定游戏窗口。",
+            "权限提升失败",
+            "Iconx"
+        )
+    }
+    return false
+}
+
+QuoteCliArg(value) {
+    return '"' StrReplace(value, '"', '\"') '"'
 }
 
 

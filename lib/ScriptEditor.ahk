@@ -23,7 +23,8 @@ class ScriptEditor {
     Build() {
         guiObj := Gui(, "统一脚本编辑器")
         guiObj.SetFont("s10")
-        guiObj.BackColor := "20242B"
+        guiObj.BackColor := "FFFFFF"  ; 改为亮色背景，确保黑色字体清晰可见
+
 
         outerMargin := 16
         columnGap := 12

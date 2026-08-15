@@ -76,8 +76,13 @@ class WindowPicker {
         hwnd := this.ResolveHoveredWindow()
         this.hoveredHwnd := hwnd
         if hwnd {
-            title := WinGetTitle("ahk_id " hwnd)
-            exeName := WinGetProcessName("ahk_id " hwnd)
+            try {
+                title := WinGetTitle("ahk_id " hwnd)
+                exeName := WinGetProcessName("ahk_id " hwnd)
+            } catch as err {
+                title := "未知"
+                exeName := "未知"
+            }
             ToolTip "瞄准中: " title " (" exeName ")`n左键或回车确认，ESC 取消"
         } else {
             ToolTip "瞄准中: (未指向窗口)`n左键或回车确认，ESC 取消"
@@ -129,9 +134,16 @@ class WindowPicker {
         if !hwnd
             return
         this.hoveredHwnd := hwnd
-        title := WinGetTitle("ahk_id " hwnd)
-        exeName := WinGetProcessName("ahk_id " hwnd)
-        WinGetClientPos(&cx, &cy, &cw, &ch, "ahk_id " hwnd)
+        try {
+            title := WinGetTitle("ahk_id " hwnd)
+            exeName := WinGetProcessName("ahk_id " hwnd)
+            WinGetClientPos(&cx, &cy, &cw, &ch, "ahk_id " hwnd)
+        } catch as err {
+            title := "Unknown"
+            exeName := "Unknown"
+            cw := 0
+            ch := 0
+        }
         if this.callback
             this.callback.Call(hwnd, exeName, title, cw, ch)
         this.Stop()
