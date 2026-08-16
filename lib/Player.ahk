@@ -71,13 +71,19 @@ class Player {
 
     ; 执行一次或多次客户区点击
     DoClientClick(hwnd, x, y, button, repeat := 1, intervalMs := 0) {
-        if !hwnd || !WinExist("ahk_id " hwnd)
+        if !hwnd || !WinExist("ahk_id " hwnd) {
+            this.log.Warn("点击失败: 窗口不存在 hwnd=" hwnd)
             return false
+        }
         WinGetClientPos(&cx, &cy, &cw, &ch, "ahk_id " hwnd)
-        if (x < 0 || y < 0 || x >= cw || y >= ch)
+        if (x < 0 || y < 0 || x >= cw || y >= ch) {
+            this.log.Warn("点击失败: 坐标越界 (" x "," y ") 客户区=" cw "x" ch)
             return false
-        if !this.MoveCursorToClient(hwnd, x, y)
+        }
+        if !this.MoveCursorToClient(hwnd, x, y) {
+            this.log.Warn("点击失败: 移动光标失败 (" x "," y ")")
             return false
+        }
         buttonName := (button = "R") ? "Right" : "Left"
         clickCount := repeat is Number ? Integer(repeat) : 1
         if (clickCount < 1)
@@ -87,6 +93,7 @@ class Player {
             interval := 0
         if (interval = 0) {
             this.ControlClientClick(hwnd, x, y, buttonName, clickCount)
+            this.log.Info("点击执行: (" x "," y ") 按钮=" buttonName " 次数=" clickCount)
             return true
         }
         Loop clickCount {
@@ -94,6 +101,36 @@ class Player {
             if (A_Index < clickCount && interval > 0)
                 Sleep interval
         }
+        this.log.Info("点击执行: (" x "," y ") 按钮=" buttonName " 次数=" clickCount " 间隔=" interval "ms")
+        return true
+    }
+
+    ; 物理点击：激活窗口后用真实鼠标点击（游戏可能忽略后台左键消息）
+    DoPhysicalClientClick(hwnd, x, y, button, repeat := 1, intervalMs := 0) {
+        if !hwnd || !WinExist("ahk_id " hwnd) {
+            this.log.Warn("物理点击失败: 窗口不存在 hwnd=" hwnd)
+            return false
+        }
+        if !this.ResolveClientClick(hwnd, x, y, &screenX, &screenY) {
+            this.log.Warn("物理点击失败: 坐标越界 (" x "," y ")")
+            return false
+        }
+        try WinActivate("ahk_id " hwnd)
+        Sleep 50
+        MouseMove(screenX, screenY, 0)
+        buttonName := (button = "R") ? "Right" : "Left"
+        clickCount := repeat is Number ? Integer(repeat) : 1
+        if (clickCount < 1)
+            clickCount := 1
+        interval := intervalMs is Number ? Integer(intervalMs) : 0
+        if (interval < 0)
+            interval := 0
+        Loop clickCount {
+            Click(buttonName)
+            if (A_Index < clickCount && interval > 0)
+                Sleep interval
+        }
+        this.log.Info("物理点击执行: (" x "," y ") 按钮=" buttonName " 次数=" clickCount)
         return true
     }
 
@@ -130,6 +167,38 @@ class Player {
             default:
                 return false
         }
+    }
+
+    BeginPhysicalClientMouseHold(hwnd, x, y, button := "R") {
+        if !hwnd || !WinExist("ahk_id " hwnd)
+            return false
+        WinGetClientPos(&cx, &cy, &cw, &ch, "ahk_id " hwnd)
+        if (x < 0 || y < 0 || x >= cw || y >= ch)
+            return false
+        if !this.MoveCursorToClient(hwnd, x, y)
+            return false
+        buttonToken := this.ResolveMouseButtonToken(button)
+        if (buttonToken = "")
+            return false
+        this.SendPhysicalMouseButton(this.ResolveMouseButtonSendName(buttonToken), "down")
+        return true
+    }
+
+    UpdatePhysicalClientMouseHold(hwnd, x, y) {
+        if !hwnd || !WinExist("ahk_id " hwnd)
+            return false
+        WinGetClientPos(&cx, &cy, &cw, &ch, "ahk_id " hwnd)
+        if (x < 0 || y < 0 || x >= cw || y >= ch)
+            return false
+        return this.MoveCursorToClient(hwnd, x, y)
+    }
+
+    EndPhysicalMouseHold(button := "R") {
+        buttonToken := this.ResolveMouseButtonToken(button)
+        if (buttonToken = "")
+            return false
+        this.SendPhysicalMouseButton(this.ResolveMouseButtonSendName(buttonToken), "up")
+        return true
     }
 
     ResolveSearchRect(hwnd, region, &x1, &y1, &x2, &y2) {
@@ -290,6 +359,26 @@ class Player {
             default:
                 return ""
         }
+    }
+
+    ResolveMouseButtonSendName(buttonToken) {
+        switch buttonToken {
+            case "Right":
+                return "RButton"
+            case "Middle":
+                return "MButton"
+            case "Left":
+                return "LButton"
+            default:
+                return ""
+        }
+    }
+
+    SendPhysicalMouseButton(buttonToken, action) {
+        if (buttonToken = "")
+            return
+        actionName := StrLower(action)
+        SendEvent("{" buttonToken " " actionName "}")
     }
 
     SendClientMouseButtonDown(hwnd, x, y, buttonToken) {

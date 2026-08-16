@@ -13,6 +13,7 @@ class ScriptEditor {
         this.propInputs := Map()
         this.propLabels := []
         this.propEditors := []
+        this.propHelpTexts := []
         this.homePageControls := []
         this.scriptPageControls := []
         this.flowPageControls := []
@@ -22,6 +23,7 @@ class ScriptEditor {
         this.botRunStateText := "当前状态：空闲"
         this.defaultStatusContextText := "运行上下文`n当前流程、脚本、步骤会在后续状态同步中继续补全。"
         this.statusContextText := this.defaultStatusContextText
+        this.moveDirectionAdvice := Map()
     }
 
     Build() {
@@ -38,10 +40,10 @@ class ScriptEditor {
         shellH := 820
         workspaceX := navX + navW + columnGap
         workspaceY := outerMargin
-        workspaceW := 860
+        workspaceW := 890
         statusX := workspaceX + workspaceW + columnGap
         statusY := outerMargin
-        statusW := 250
+        statusW := 220
         pagePadding := 16
         pageX := workspaceX + pagePadding
         pageY := workspaceY + pagePadding
@@ -88,6 +90,17 @@ class ScriptEditor {
         this.btnPreviewRegionOcr := guiObj.Add("Button", Format("x{} y{} w{} h28", pageX + 680, pageY + 230, 120), "查看 OCR 文本")
         this.btnSetSim := guiObj.Add("Button", Format("x{} y{} w{} h28", pageX + 416, pageY + 268, 160), "设置找图相似度")
 
+        scriptListX := pageX + 16
+        scriptListY := pageY + 164
+        scriptListW := 150
+        stepListX := scriptListX + scriptListW + 12
+        stepListW := 370
+        detailPaneX := stepListX + stepListW + 12
+        detailPaneW := (pageX + pageW - 16) - detailPaneX
+        navHelperPrimaryY := pageY + 122
+        navHelperQuickY := pageY + 156
+        propsPanelY := pageY + 188
+
         this.pageScriptEditor := guiObj.Add("Text", Format("x{} y{} w{} h{} Border", pageX, pageY, pageW, pageH), "")
         this.lblScriptTitle := guiObj.Add("Text", Format("x{} y{} w{} h24 +0x200", pageX + 16, pageY + 12, pageW - 32), "脚本编辑")
         this.btnNewScript := guiObj.Add("Button", Format("x{} y{} w90 h28", pageX + 16, pageY + 48), "新建脚本")
@@ -96,6 +109,8 @@ class ScriptEditor {
         this.btnRunScript := guiObj.Add("Button", Format("x{} y{} w110 h28", pageX + 310, pageY + 48), "运行整个脚本")
         this.btnRunFromStep := guiObj.Add("Button", Format("x{} y{} w130 h28", pageX + 428, pageY + 48), "从当前步骤运行")
         this.btnRunCurrentStep := guiObj.Add("Button", Format("x{} y{} w130 h28", pageX + 566, pageY + 48), "单步执行当前步骤")
+        this.btnAddBranch := guiObj.Add("Button", Format("x{} y{} w60 h28", pageX + 704, pageY + 48), "+分支")
+        this.btnConfigureStep := guiObj.Add("Button", Format("x{} y{} w60 h28", pageX + 772, pageY + 48), "配置")
         this.btnRecordClick := guiObj.Add("Button", Format("x{} y{} w110 h28", pageX + 16, pageY + 86), "录制点击")
         this.btnRecordKey := guiObj.Add("Button", Format("x{} y{} w110 h28", pageX + 134, pageY + 86), "录制按键")
         this.btnAddWait := guiObj.Add("Button", Format("x{} y{} w90 h28", pageX + 252, pageY + 86), "+ 等待")
@@ -103,11 +118,15 @@ class ScriptEditor {
         this.btnAddFindImage := guiObj.Add("Button", Format("x{} y{} w90 h28", pageX + 448, pageY + 86), "+ 找图")
         this.btnAddClickImage := guiObj.Add("Button", Format("x{} y{} w90 h28", pageX + 546, pageY + 86), "+ 图点")
         this.btnAddOcrMatch := guiObj.Add("Button", Format("x{} y{} w90 h28", pageX + 644, pageY + 86), "+ OCR")
-        this.btnAddBranch := guiObj.Add("Button", Format("x{} y{} w90 h28", pageX + 742, pageY + 86), "+ 分支")
-        this.btnConfigureStep := guiObj.Add("Button", Format("x{} y{} w130 h28", pageX + 644, pageY + 124), "配置识别步骤")
-        this.lstScripts := guiObj.Add("ListBox", Format("x{} y{} w170 h520", pageX + 16, pageY + 164), [])
-        this.lvSteps := guiObj.Add("ListView", Format("x{} y{} w360 h520", pageX + 198, pageY + 164), ["序号", "启用", "类型", "摘要"])
-        this.pnlProps := guiObj.Add("Text", Format("x{} y{} w260 h120 Border", pageX + 568, pageY + 164), "步骤属性")
+        this.btnAddMoveToCoord := guiObj.Add("Button", Format("x{} y{} w90 h28", pageX + 742, pageY + 86), "+ 导航")
+        this.btnPickMoveCoordRegion := guiObj.Add("Button", Format("x{} y{} w72 h28", detailPaneX, navHelperPrimaryY), "取坐标框")
+        this.btnPickMoveCenter := guiObj.Add("Button", Format("x{} y{} w64 h28", detailPaneX + 76, navHelperPrimaryY), "取中心")
+        this.btnTestMoveToCoord := guiObj.Add("Button", Format("x{} y{} w56 h28", detailPaneX + 144, navHelperPrimaryY), "试跑")
+        this.btnCaptureCoordTemplates := guiObj.Add("Button", Format("x{} y{} w56 h28", detailPaneX + 204, navHelperPrimaryY), "截模板")
+        this.btnReadCoord := guiObj.Add("Button", Format("x{} y{} w56 h28", detailPaneX + 264, navHelperPrimaryY), "读坐标")
+        this.lstScripts := guiObj.Add("ListBox", Format("x{} y{} w{} h520", scriptListX, scriptListY, scriptListW), [])
+        this.lvSteps := guiObj.Add("ListView", Format("x{} y{} w{} h520", stepListX, scriptListY, stepListW), ["序号", "启用", "类型", "摘要"])
+        this.pnlProps := guiObj.Add("Edit", Format("x{} y{} w{} h34 ReadOnly -Wrap HScroll VScroll", detailPaneX, propsPanelY, detailPaneW), "步骤属性")
         this.BuildStepEditor(guiObj)
 
         this.pageFlowEditor := guiObj.Add("Text", Format("x{} y{} w{} h{} Border", pageX, pageY, pageW, pageH), "")
@@ -157,8 +176,14 @@ class ScriptEditor {
         this.btnAddFindImage.OnEvent("Click", ObjBindMethod(this, "HandleAddFindImage"))
         this.btnAddClickImage.OnEvent("Click", ObjBindMethod(this, "HandleAddClickImage"))
         this.btnAddOcrMatch.OnEvent("Click", ObjBindMethod(this, "HandleAddOcrMatch"))
+        this.btnAddMoveToCoord.OnEvent("Click", ObjBindMethod(this, "HandleAddMoveToCoord"))
         this.btnAddBranch.OnEvent("Click", ObjBindMethod(this, "HandleAddBranch"))
         this.btnConfigureStep.OnEvent("Click", ObjBindMethod(this, "HandleConfigureStep"))
+        this.btnTestMoveToCoord.OnEvent("Click", ObjBindMethod(this, "HandleTestMoveToCoord"))
+        this.btnCaptureCoordTemplates.OnEvent("Click", ObjBindMethod(this, "HandleCaptureCoordTemplates"))
+        this.btnReadCoord.OnEvent("Click", ObjBindMethod(this, "HandleReadCoord"))
+        this.btnPickMoveCoordRegion.OnEvent("Click", ObjBindMethod(this, "HandlePickMoveCoordRegion"))
+        this.btnPickMoveCenter.OnEvent("Click", ObjBindMethod(this, "HandlePickMoveCenter"))
         this.lstFlows.OnEvent("Change", ObjBindMethod(this, "OnFlowListChange"))
         this.lvFlowNodes.OnEvent("ItemSelect", ObjBindMethod(this, "OnFlowNodeSelect"))
         this.btnNewFlow.OnEvent("Click", ObjBindMethod(this, "HandleNewFlow"))
@@ -187,10 +212,10 @@ class ScriptEditor {
         this.scriptPageControls := [
             "pageScriptEditor", "lblScriptTitle", "btnNewScript", "btnSaveScript", "btnDeleteScript", "btnRunScript",
             "btnRunFromStep", "btnRunCurrentStep", "btnRecordClick", "btnRecordKey", "btnAddWait", "btnAddClick",
-            "btnAddFindImage", "btnAddClickImage", "btnAddOcrMatch", "btnAddBranch", "btnConfigureStep",
+            "btnAddFindImage", "btnAddClickImage", "btnAddOcrMatch", "btnAddMoveToCoord", "btnAddBranch", "btnConfigureStep", "btnTestMoveToCoord", "btnPickMoveCoordRegion", "btnPickMoveCenter",
             "lstScripts", "lvSteps", "pnlProps", "lblStepType", "edtStepType", "lblStepName", "edtStepName",
             "chkStepEnabled", "lblOnSuccessAction", "ddlOnSuccessAction", "lblOnSuccessTarget", "ddlOnSuccessTarget",
-            "lblOnFailureAction", "ddlOnFailureAction", "lblOnFailureTarget", "ddlOnFailureTarget", "btnApplyStep"
+            "lblOnFailureAction", "ddlOnFailureAction", "lblOnFailureTarget", "ddlOnFailureTarget", "btnApplyStep", "txtStepHint"
         ]
         this.flowPageControls := [
             "pageFlowEditor", "lblFlowTitle", "btnNewFlow", "btnSaveFlow", "btnDeleteFlow", "btnAddFlowNode", "btnRunFlow",
@@ -377,6 +402,29 @@ class ScriptEditor {
         return this.deps["runner"].RunSingleStep(step, this.GetBoundHwnd())
     }
 
+    RunSelectedMoveToCoordStep() {
+        if !(IsObject(this.currentScript) && this.currentScript.steps.Length > 0)
+            return false
+        step := this.currentScript.steps[this.selectedStepIndex]
+        if (step.type != "move_to_coord")
+            return false
+        result := this.deps["runner"].RunSingleStep(step, this.GetBoundHwnd())
+        this.lastMoveToCoordTestResult := result
+        return IsObject(result) ? !!result.ok : !!result
+    }
+
+    CalibrateSelectedMoveSpeed() {
+        return true
+    }
+
+    DiagnoseSelectedMoveDirection() {
+        return false
+    }
+
+    ApplySelectedMoveDirectionAdvice() {
+        return false
+    }
+
     RunCurrentFlow() {
         runner := this.deps.Has("flowRunner") ? this.deps["flowRunner"] : this.deps["runner"]
         return runner.RunFlow(this.currentFlow, this.GetBoundHwnd())
@@ -463,6 +511,8 @@ class ScriptEditor {
                 return "图片 " (params.HasProp("image") ? params.image : "")
             case "ocr_match":
                 return "OCR " (params.HasProp("targetText") ? params.targetText : "")
+            case "move_to_coord":
+                return "导航 " (params.HasProp("targetX") ? params.targetX : 0) "," (params.HasProp("targetY") ? params.targetY : 0)
             case "branch":
                 return "条件 " (params.HasProp("conditionType") ? params.conditionType : "")
             default:
@@ -514,7 +564,7 @@ class ScriptEditor {
         if !this.HasProp("pnlProps")
             return
         if !IsObject(this.currentScript) || this.currentScript.steps.Length = 0 {
-            this.pnlProps.Text := "步骤属性"
+            this.pnlProps.Value := "步骤属性"
             this.SetStepEditorEmptyState()
             this.EnforcePageVisibility()
             return
@@ -525,9 +575,11 @@ class ScriptEditor {
             . "启用: " (step.enabled ? "是" : "否") "`n"
             . "成功: " this.FormatBranch(step.onSuccess) "`n"
             . "失败: " this.FormatBranch(step.onFailure)
-        for key, value in step.params.OwnProps()
-            text .= "`n" key ": " this.ParamValueText(value)
-        this.pnlProps.Text := text
+        text .= this.StepParamsSummaryText(step)
+        hint := this.StepPropsHintText(step)
+        if (hint != "")
+            text .= "`n" hint
+        this.pnlProps.Value := text
         this.FillStepEditor(step)
         this.EnforcePageVisibility()
     }
@@ -651,6 +703,8 @@ class ScriptEditor {
             for _, ctrl in this.propLabels
                 ctrl.Visible := false
             for _, ctrl in this.propEditors
+                ctrl.Visible := false
+            for _, ctrl in this.propHelpTexts
                 ctrl.Visible := false
         }
     }
@@ -874,8 +928,6 @@ class ScriptEditor {
         callback := this.deps[key]
         if IsObject(callback)
             ctrl.OnEvent("Click", callback)
-        else if (callback != "")
-            ctrl.OnEvent("Click", Func(callback))
     }
 
     HandleNewScript(*) {
@@ -890,13 +942,43 @@ class ScriptEditor {
     }
 
     HandleRunScript(*) {
-        if IsObject(this.currentScript)
-            this.RunCurrentScript()
+        if !IsObject(this.currentScript)
+            return
+        result := this.RunCurrentScript()
+        this.ShowRunResult(result)
     }
 
     HandleRunFromCurrentStep(*) {
-        if IsObject(this.currentScript)
-            this.RunFromCurrentStep()
+        if !IsObject(this.currentScript)
+            return
+        result := this.RunFromCurrentStep()
+        this.ShowRunResult(result)
+    }
+
+    ShowRunResult(result) {
+        if !IsObject(result)
+            return
+        if (result.HasProp("ok") && result.ok) {
+            MsgBox("脚本执行完成。", "运行结果")
+            return
+        }
+        failedId := result.HasProp("failedStepId") ? result.failedStepId : ""
+        failedIndex := 0
+        failedSummary := ""
+        if IsObject(this.currentScript) && (failedId != "") {
+            for index, step in this.currentScript.steps {
+                if (step.id = failedId) {
+                    failedIndex := index
+                    failedSummary := this.StepSummary(step)
+                    break
+                }
+            }
+        }
+        message := "脚本执行中断。"
+        if (failedIndex > 0)
+            message .= "`n失败步骤: 第 " failedIndex " 步 [" failedSummary "]"
+        message .= "`n`n该步骤的「失败后」动作为停止，因此后续步骤未执行。"
+        MsgBox(message, "运行结果")
     }
 
     HandleRunCurrentStep(*) {
@@ -963,6 +1045,48 @@ class ScriptEditor {
             this.ConfigureSelectedStep()
     }
 
+    HandleAddMoveToCoord(*) {
+        step := this.AddStep("move_to_coord")
+        if step
+            this.ConfigureSelectedStep()
+    }
+
+    HandleApplyMovePreset(*) {
+        MsgBox("点击式导航已不再提供预设工具。", "提示")
+    }
+
+    HandleFlipMoveAxis(axisName, *) {
+        MsgBox("点击式导航已不再提供方向翻转工具。", "提示")
+    }
+
+    HandleSwapMoveAxes(*) {
+        MsgBox("点击式导航已不再提供交换轴工具。", "提示")
+    }
+
+    HandleAdjustMoveDirectionScale(delta, *) {
+        MsgBox("点击式导航已不再提供缩放纠偏工具。", "提示")
+    }
+
+    ApplySelectedMovePreset() {
+        return false
+    }
+
+    FlipSelectedMoveAxis(axisName) {
+        return false
+    }
+
+    SwapSelectedMoveAxes() {
+        return false
+    }
+
+    AdjustSelectedMoveDirectionScale(delta) {
+        return false
+    }
+
+    DefaultMovePreset() {
+        return {}
+    }
+
     HandleAddBranch(*) {
         step := this.AddStep("branch")
         if step
@@ -971,6 +1095,118 @@ class ScriptEditor {
 
     HandleConfigureStep(*) {
         this.ConfigureSelectedStep()
+    }
+
+    HandleTestMoveToCoord(*) {
+        if !IsObject(this.currentScript) {
+            MsgBox("请先新建或选择一个脚本。", "提示")
+            return
+        }
+        if !this.GetBoundHwnd() {
+            MsgBox("请先绑定窗口后再测试导航步骤。", "提示")
+            return
+        }
+        if !this.RunSelectedMoveToCoordStep() {
+            result := this.HasProp("lastMoveToCoordTestResult") ? this.lastMoveToCoordTestResult : ""
+            message := "当前选中的步骤不是导航步骤，或导航测试执行失败。"
+            if IsObject(result) && result.HasProp("reason") && result.reason != ""
+                message := "导航测试失败: " . result.reason
+            MsgBox(message, "提示")
+        }
+    }
+
+    HandleCaptureCoordTemplates(*) {
+        if !this.GetBoundHwnd() {
+            MsgBox("请先绑定游戏窗口。", "提示")
+            return
+        }
+        if (this.deps.Has("onCaptureCoordTemplates")) {
+            callback := this.deps["onCaptureCoordTemplates"]
+            if IsObject(callback)
+                callback.Call()
+        } else {
+            MsgBox("模板截取功能未就绪。", "提示")
+        }
+    }
+
+    HandleReadCoord(*) {
+        if !this.GetBoundHwnd() {
+            MsgBox("请先绑定游戏窗口。", "提示")
+            return
+        }
+        if (this.deps.Has("onReadCoord")) {
+            callback := this.deps["onReadCoord"]
+            if IsObject(callback)
+                callback.Call()
+        } else {
+            MsgBox("读坐标功能未就绪。", "提示")
+        }
+    }
+
+    HandleCalibrateMoveSpeed(*) {
+        MsgBox("点击式导航已不再提供跑速标定。", "提示")
+    }
+
+    HandleDiagnoseMoveDirection(*) {
+        MsgBox("点击式导航已不再提供方向诊断。", "提示")
+    }
+
+    HandleApplyMoveDirectionAdvice(*) {
+        MsgBox("点击式导航已不再提供方向建议应用。", "提示")
+    }
+
+    HandlePickMoveCoordRegion(*) {
+        if !this.PickSelectedMoveCoordRegion()
+            MsgBox("当前选中的步骤不是导航步骤，或取框工具不可用。", "提示")
+    }
+
+    HandlePickMoveCenter(*) {
+        if !this.PickSelectedMoveCenter()
+            MsgBox("当前选中的步骤不是导航步骤，或取点工具不可用。", "提示")
+    }
+
+    PickSelectedMoveCoordRegion() {
+        if !(IsObject(this.currentScript) && this.currentScript.steps.Length > 0 && this.deps.Has("manualTools"))
+            return false
+        step := this.currentScript.steps[this.selectedStepIndex]
+        if (step.type != "move_to_coord")
+            return false
+
+        info := this.deps["manualTools"].ShowTextOcrDialog(
+            "配置导航步骤",
+            "",
+            step.params.HasProp("coordRegion") ? step.params.coordRegion : "",
+            false
+        )
+        if !info
+            return false
+
+        step.params.coordRegion := info.region
+        this.RefreshSteps()
+        this.SelectStep(this.selectedStepIndex)
+        return true
+    }
+
+    PickSelectedMoveCenter() {
+        if !(IsObject(this.currentScript) && this.currentScript.steps.Length > 0 && this.deps.Has("manualTools"))
+            return false
+        step := this.currentScript.steps[this.selectedStepIndex]
+        if (step.type != "move_to_coord")
+            return false
+
+        initialPoint := {
+            x: step.params.HasProp("playerCenterX") ? step.params.playerCenterX : 0,
+            y: step.params.HasProp("playerCenterY") ? step.params.playerCenterY : 0
+        }
+        point := this.deps["manualTools"].ShowClientPointDialog("设置玩家中心点", initialPoint, "请点一下角色中心")
+        if !IsObject(point)
+            return false
+
+        step.params.playerCenterX := point.x
+        step.params.playerCenterY := point.y
+        this.RefreshSteps()
+        this.SelectStep(this.selectedStepIndex)
+        return true
     }
 
     ConfigureSelectedStep() {
@@ -1011,6 +1247,15 @@ class ScriptEditor {
                     step.params.targetText := info.targetText
                     step.params.region := info.region
                 }
+            case "move_to_coord":
+                info := manualTools.ShowTextOcrDialog(
+                    "配置导航步骤",
+                    "",
+                    step.params.HasProp("coordRegion") ? step.params.coordRegion : "",
+                    false
+                )
+                if info
+                    step.params.coordRegion := info.region
             case "branch":
                 conditionType := step.params.HasProp("conditionType") ? step.params.conditionType : "ocr_match"
                 if (conditionType = "find_image") {
@@ -1093,7 +1338,7 @@ class ScriptEditor {
     BuildStepEditor(guiObj) {
         this.pnlProps.GetPos(&panelX, &panelY, &panelW, &panelH)
         editorX := panelX + 10
-        labelW := 60
+        labelW := 78
         fieldX := editorX + labelW
         fieldW := panelW - labelW - 20
         rowY := panelY + panelH + 12
@@ -1101,22 +1346,22 @@ class ScriptEditor {
         this.lblStepType := guiObj.Add("Text", Format("x{} y{} w{} h23 +0x200", editorX, rowY, labelW), "类型")
         this.edtStepType := guiObj.Add("Edit", Format("x{} y{} w{} h23 ReadOnly", fieldX, rowY, fieldW), "")
 
-        rowY += 30
+        rowY += 26
         this.lblStepName := guiObj.Add("Text", Format("x{} y{} w{} h23 +0x200", editorX, rowY, labelW), "名称")
         this.edtStepName := guiObj.Add("Edit", Format("x{} y{} w{} h23", fieldX, rowY, fieldW), "")
 
-        rowY += 30
+        rowY += 26
         this.chkStepEnabled := guiObj.Add("CheckBox", Format("x{} y{} w90 h23", fieldX, rowY), "启用")
         this.btnApplyStep := guiObj.Add("Button", Format("x{} y{} w120 h28", panelX + panelW - 130, rowY - 2), "应用到当前步骤")
         this.btnApplyStep.OnEvent("Click", ObjBindMethod(this, "HandleApplyStep"))
 
-        rowY += 34
+        rowY += 28
         this.lblOnSuccessAction := guiObj.Add("Text", Format("x{} y{} w{} h23 +0x200", editorX, rowY, labelW), "成功")
         this.ddlOnSuccessAction := guiObj.Add("ComboBox", Format("x{} y{} w90 h120", fieldX, rowY), ["next", "jump", "stop"])
         this.lblOnSuccessTarget := guiObj.Add("Text", Format("x{} y{} w36 h23 +0x200", fieldX + 96, rowY, 36), "到")
         this.ddlOnSuccessTarget := guiObj.Add("ComboBox", Format("x{} y{} w{} h120", fieldX + 132, rowY, fieldW - 132), [])
 
-        rowY += 30
+        rowY += 26
         this.lblOnFailureAction := guiObj.Add("Text", Format("x{} y{} w{} h23 +0x200", editorX, rowY, labelW), "失败")
         this.ddlOnFailureAction := guiObj.Add("ComboBox", Format("x{} y{} w90 h120", fieldX, rowY), ["next", "jump", "stop"])
         this.lblOnFailureTarget := guiObj.Add("Text", Format("x{} y{} w36 h23 +0x200", fieldX + 96, rowY, 36), "到")
@@ -1126,7 +1371,9 @@ class ScriptEditor {
         this.paramEditorLabelW := labelW
         this.paramEditorFieldX := fieldX
         this.paramEditorFieldW := fieldW
-        this.paramEditorStartY := rowY + 34
+        this.paramEditorStartY := rowY + 28
+        this.txtStepHint := guiObj.Add("Edit", Format("x{} y{} w{} h56 ReadOnly VScroll", editorX, this.paramEditorStartY, labelW + fieldW), "")
+        this.txtStepHint.Visible := false
     }
 
     BuildFlowEditor(guiObj) {
@@ -1174,6 +1421,10 @@ class ScriptEditor {
         this.ddlOnFailureAction.Text := "stop"
         this.ddlOnFailureTarget.Text := ""
         this.HideParamEditors()
+        if this.HasProp("txtStepHint") {
+            this.txtStepHint.Value := ""
+            this.txtStepHint.Visible := false
+        }
         this.SetStepEditorEnabled(false)
         this.UpdateLayout()
     }
@@ -1191,12 +1442,18 @@ class ScriptEditor {
         this.ddlOnSuccessTarget.Text := step.onSuccess.HasProp("targetStepId") ? step.onSuccess.targetStepId : ""
         this.ddlOnFailureAction.Text := step.onFailure.HasProp("action") ? step.onFailure.action : "stop"
         this.ddlOnFailureTarget.Text := step.onFailure.HasProp("targetStepId") ? step.onFailure.targetStepId : ""
+        if this.HasProp("btnTestMoveToCoord")
+            this.btnTestMoveToCoord.Enabled := (step.type = "move_to_coord")
+        if this.HasProp("btnPickMoveCoordRegion")
+            this.btnPickMoveCoordRegion.Enabled := (step.type = "move_to_coord") && this.deps.Has("manualTools")
+        if this.HasProp("btnPickMoveCenter")
+            this.btnPickMoveCenter.Enabled := (step.type = "move_to_coord") && this.deps.Has("manualTools")
         this.RebuildParamEditors(step)
         this.UpdateLayout()
     }
 
     SetStepEditorEnabled(enabled) {
-        controls := ["edtStepType", "edtStepName", "chkStepEnabled", "ddlOnSuccessAction", "ddlOnSuccessTarget", "ddlOnFailureAction", "ddlOnFailureTarget", "btnApplyStep", "btnConfigureStep"]
+        controls := ["edtStepType", "edtStepName", "chkStepEnabled", "ddlOnSuccessAction", "ddlOnSuccessTarget", "ddlOnFailureAction", "ddlOnFailureTarget", "btnApplyStep", "btnConfigureStep", "btnTestMoveToCoord", "btnPickMoveCoordRegion", "btnPickMoveCenter"]
         for _, name in controls {
             if this.HasProp(name)
                 this.%name%.Enabled := enabled
@@ -1209,26 +1466,66 @@ class ScriptEditor {
         this.HideParamEditors()
         rowY := this.paramEditorStartY
         index := 1
-        for key, value in step.params.OwnProps() {
+        for _, key in this.OrderedStepParamKeys(step) {
+            value := step.params.%key%
             if (index > this.propLabels.Length) {
                 label := this.gui.Add("Text", Format("x{} y{} w{} h23 +0x200", this.paramEditorStartX, rowY, this.paramEditorLabelW), "")
                 input := this.gui.Add("Edit", Format("x{} y{} w{} h23", this.paramEditorFieldX, rowY, this.paramEditorFieldW), "")
+                help := this.gui.Add("Text", Format("x{} y{} w{} h18", this.paramEditorFieldX, rowY + 22, this.paramEditorFieldW), "")
                 this.propLabels.Push(label)
                 this.propEditors.Push(input)
+                this.propHelpTexts.Push(help)
             } else {
                 label := this.propLabels[index]
                 input := this.propEditors[index]
-                label.Move(this.paramEditorStartX, rowY, this.paramEditorLabelW)
-                input.Move(this.paramEditorFieldX, rowY, this.paramEditorFieldW)
+                help := this.propHelpTexts[index]
             }
-            label.Text := key
+            label.Move(this.paramEditorStartX, rowY, this.paramEditorLabelW)
+            input.Move(this.paramEditorFieldX, rowY, this.paramEditorFieldW)
+            label.Text := this.ParamLabelText(key, step.type)
             label.Visible := true
             input.Value := this.ParamEditorText(value)
             input.Visible := true
             this.propInputs[key] := input
-            rowY += 28
+            help.Text := ""
+            help.Visible := false
+            rowY += (step.type = "move_to_coord") ? 24 : 28
             index += 1
         }
+        this.RefreshStepHint(step, rowY)
+    }
+
+    OrderedStepParamKeys(step) {
+        keys := []
+        if !(IsObject(step) && step.HasProp("params"))
+            return keys
+        if (step.type = "move_to_coord") {
+            preferred := ["coordRegion", "targetX", "targetY", "playerCenterX", "playerCenterY", "clickOffsetPx", "ocrEveryClicks", "ocrRetryCount", "ocrRetryIntervalMs", "stuckRounds", "tolerance", "timeoutMs"]
+            for _, key in preferred {
+                if (step.params.HasProp(key) && this.ShouldShowMoveToCoordParam(key))
+                    keys.Push(key)
+            }
+            for key, _ in step.params.OwnProps() {
+                if (!this.HasArrayItem(keys, key) && this.ShouldShowMoveToCoordParam(key))
+                    keys.Push(key)
+            }
+            return keys
+        }
+        for key, _ in step.params.OwnProps()
+            keys.Push(key)
+        return keys
+    }
+
+    ShouldShowMoveToCoordParam(key) {
+        return !(key = "ocrRetryCount" || key = "ocrRetryIntervalMs" || key = "stuckRounds")
+    }
+
+    HasArrayItem(items, target) {
+        for _, item in items {
+            if (item = target)
+                return true
+        }
+        return false
     }
 
     HideParamEditors() {
@@ -1236,7 +1533,18 @@ class ScriptEditor {
             ctrl.Visible := false
         for _, ctrl in this.propEditors
             ctrl.Visible := false
+        for _, ctrl in this.propHelpTexts
+            ctrl.Visible := false
         this.propInputs := Map()
+    }
+
+    RefreshStepHint(step, topY) {
+        if !this.HasProp("txtStepHint")
+            return
+        hint := this.StepEditorHintText(step)
+        this.txtStepHint.Value := hint
+        this.txtStepHint.Move(this.paramEditorStartX, topY, this.paramEditorLabelW + this.paramEditorFieldW, 56)
+        this.txtStepHint.Visible := (hint != "")
     }
 
     SetFlowEditorEmptyState() {
@@ -1355,10 +1663,24 @@ class ScriptEditor {
         if (text = "")
             return ""
 
-        if RegExMatch(text, "O)\{?\s*x1:\s*(-?\d+)\s*,\s*y1:\s*(-?\d+)\s*,\s*x2:\s*(-?\d+)\s*,\s*y2:\s*(-?\d+)\s*\}?", &m)
-            return {x1: Integer(m[1]), y1: Integer(m[2]), x2: Integer(m[3]), y2: Integer(m[4])}
-        if RegExMatch(text, "O)^\(?\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*\)?$", &m)
-            return {x1: Integer(m[1]), y1: Integer(m[2]), x2: Integer(m[3]), y2: Integer(m[4])}
+        text := RegExReplace(text, "i)x1\s*:|y1\s*:|x2\s*:|y2\s*:", "")
+        numberText := RegExReplace(text, "[^\d-]+", ",")
+        numberText := Trim(numberText, ",")
+        if (numberText = "")
+            return ""
+        parts := StrSplit(numberText, ",")
+        if (parts.Length < 4)
+            return ""
+        try {
+            return {
+                x1: Integer(parts[1]),
+                y1: Integer(parts[2]),
+                x2: Integer(parts[3]),
+                y2: Integer(parts[4])
+            }
+        } catch {
+            return ""
+        }
         return ""
     }
 
@@ -1366,5 +1688,159 @@ class ScriptEditor {
         if this.deps.Has("schema")
             return this.deps["schema"].DefaultName(type)
         return type
+    }
+
+    ParamLabelText(key, stepType := "") {
+        if (stepType = "move_to_coord") {
+            switch key {
+                case "coordRegion":
+                    return "坐标识别区域"
+                case "targetX":
+                    return "目标X"
+                case "targetY":
+                    return "目标Y"
+                case "playerCenterX":
+                    return "中心X"
+                case "playerCenterY":
+                    return "中心Y"
+                case "clickOffsetPx":
+                    return "点击偏移"
+                case "ocrEveryClicks":
+                    return "校验点击数"
+                case "ocrRetryCount":
+                    return "OCR重试次数"
+                case "ocrRetryIntervalMs":
+                    return "重试间隔"
+                case "stuckRounds":
+                    return "卡住轮次"
+                case "tolerance":
+                    return "到点容差"
+                case "timeoutMs":
+                    return "超时毫秒"
+            }
+        }
+        return key
+    }
+
+    StepParamsSummaryText(step) {
+        if !(IsObject(step) && step.HasProp("params"))
+            return ""
+        text := ""
+        if (step.type = "move_to_coord")
+            return this.MoveToCoordSummaryText(step.params)
+        for key, value in step.params.OwnProps()
+            text .= "`n" this.ParamLabelText(key, step.type) ": " this.ParamValueText(value)
+        return text
+    }
+
+    MoveToCoordSummaryText(params) {
+        text := ""
+        for key, value in params.OwnProps() {
+            if (key = "targetX" || key = "targetY" || key = "playerCenterX" || key = "playerCenterY")
+                continue
+            if !this.ShouldShowMoveToCoordParam(key)
+                continue
+            labelText := this.MoveToCoordSummaryLabelText(key)
+            text .= "`n" labelText ": " this.ParamValueText(value)
+        }
+        if (params.HasProp("targetX") || params.HasProp("targetY")) {
+            targetX := params.HasProp("targetX") ? params.targetX : 0
+            targetY := params.HasProp("targetY") ? params.targetY : 0
+            text .= "`n目标坐标: " targetX "," targetY
+        }
+        if (params.HasProp("playerCenterX") || params.HasProp("playerCenterY")) {
+            centerX := params.HasProp("playerCenterX") ? params.playerCenterX : 0
+            centerY := params.HasProp("playerCenterY") ? params.playerCenterY : 0
+            text .= "`n玩家中心点: " centerX "," centerY
+        }
+        return text
+    }
+
+    MoveToCoordSummaryLabelText(key) {
+        switch key {
+            case "coordRegion":
+                return "坐标识别框"
+            case "clickOffsetPx":
+                return "点击偏移"
+            case "ocrEveryClicks":
+                return "校验频率"
+            case "ocrRetryCount":
+                return "OCR重试"
+            case "ocrRetryIntervalMs":
+                return "重试间隔"
+            case "stuckRounds":
+                return "卡住轮次"
+        }
+        return this.ParamLabelText(key, "move_to_coord")
+    }
+
+    ParamHelpText(key, stepType := "") {
+        if (stepType = "move_to_coord") {
+            switch key {
+                case "coordRegion":
+                    return "只框住地图坐标数字，尽量不要带地图名。"
+                case "playerCenterX", "playerCenterY":
+                    return "玩家中心点要尽量落在角色站位附近。"
+                case "clickOffsetPx":
+                    return "建议先用 200，再按实际游戏点击偏移微调。"
+                case "ocrEveryClicks":
+                    return "推荐 6-8 次点击做一次 OCR 校验。"
+                case "ocrRetryCount":
+                    return "OCR 偶发失败时额外再试几次，默认已调稳，一般不用改。"
+                case "ocrRetryIntervalMs":
+                    return "OCR 重试前的等待毫秒，默认已调稳，一般不用改。"
+                case "stuckRounds":
+                    return "连续几轮没更接近目标就判定卡住，默认已调稳，一般不用改。"
+                case "tolerance":
+                    return "建议 1，允许坐标在目标点附近微小偏差。"
+            }
+        }
+        return ""
+    }
+
+    StepPropsHintText(step) {
+        if !IsObject(step)
+            return ""
+        switch step.type {
+            case "move_to_coord":
+                return "提示: 每次右键按 2 格预测移动；当 X 和 Y 都未到位时优先走对角；每批点击后再 OCR 校验当前坐标；默认会自动补读 OCR 并判定卡住。"
+        }
+        return ""
+    }
+
+    StepEditorHintText(step) {
+        if !IsObject(step)
+            return ""
+        switch step.type {
+            case "move_to_coord":
+                hint := "导航提示`n"
+                    . "坐标区域尽量只框住地图坐标数字，避免把地图名一起框进去。`n"
+                    . "玩家中心点要尽量落在角色站位附近，右键点击会围绕它计算。`n"
+                    . "每次点击默认按 2 格预测移动；当 X 和 Y 都未到位时，优先走对角。`n"
+                    . "点击偏移决定鼠标落点离人物中心多远，推荐先用 200。`n"
+                    . "校验点击数决定每几次右键后再 OCR 一次，默认 6 次。`n"
+                    . "一般不用手动调整 OCR 重试和卡住判定，默认值已按实跑稳定性收紧。`n"
+                    . "到点容差建议 1，允许坐标在目标点附近微小误差。"
+                return hint
+        }
+        return ""
+    }
+
+    GetMoveDirectionAdviceText(step) {
+        advice := this.GetMoveDirectionAdvice(step)
+        if !IsObject(advice)
+            return ""
+        return advice.HasProp("summaryText") ? advice.summaryText : ""
+    }
+
+    GetMoveDirectionAdvice(step) {
+        if !(IsObject(step) && step.HasProp("id"))
+            return ""
+        if !this.moveDirectionAdvice.Has(step.id)
+            return ""
+        advice := this.moveDirectionAdvice[step.id]
+        if IsObject(advice)
+            return advice
+        return {summaryText: advice, suggestedActions: []}
     }
 }

@@ -12,9 +12,17 @@ try {
     if !IsObject(boundFn)
         throw Error("ManualTools instances should support ObjBindMethod without invalid base errors")
 
-    callbackOnlyTools := ManualTools(Map("onBotSimChanged", "DummyBotSimChanged"))
+    try {
+        ManualTools(Map("onBotSimChanged", "DummyBotSimChanged"))
+        throw Error("ManualTools should reject string callbacks for onBotSimChanged")
+    } catch as err {
+        if !InStr(err.Message, "reject")
+            throw Error("ManualTools should throw when onBotSimChanged is a string instead of a callable object")
+    }
+
+    callbackOnlyTools := ManualTools(Map("onBotSimChanged", DummyBotSimChanged))
     if !IsObject(callbackOnlyTools)
-        throw Error("ManualTools should allow storing the onBotSimChanged callback dependency")
+        throw Error("ManualTools should allow storing a callable onBotSimChanged callback dependency")
 
     sims := tools.BuildSimSweepList(0.75)
     if (sims.Length != 8)

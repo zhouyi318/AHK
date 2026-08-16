@@ -13,6 +13,13 @@ WriteStatus(exitCode) {
     FileAppend("EXIT=" exitCode, statusPath, "UTF-8")
 }
 
+WriteFailure(message) {
+    if (A_Args.Length < 1)
+        return
+    statusPath := A_Args[1]
+    FileAppend("`nFAIL=" message, statusPath, "UTF-8")
+}
+
 class FakeLogger {
     __New() {
         this.messages := []
@@ -101,6 +108,24 @@ try {
     if (runner.calls[1].outputPath = "")
         throw Error("Recognize should provide an output path to the runner")
 
+    preprocessRunner := FakeRunner(
+        "STATUS=OK`n"
+        . "TEXT_BEGIN`n"
+        . "331333`n"
+        . "TEXT_END`n"
+    )
+    preprocessOcr := TextRecognizer(logger, preprocessRunner.Call.Bind(preprocessRunner))
+    preprocessResult := preprocessOcr.Recognize(hwnd, region, "", "坐标预处理测试", true)
+    if !preprocessResult.ok
+        throw Error("Recognize should still succeed when OCR preprocessing is enabled")
+    preprocessBackend := preprocessOcr.ResolveBackend()
+    if (preprocessBackend.name = "rapidocr") {
+        if !InStr(preprocessRunner.calls[1].commandLine, "--preprocess")
+            throw Error("Recognize should enable --preprocess for RapidOCR when requested")
+    } else if InStr(preprocessRunner.calls[1].commandLine, "--preprocess") {
+        throw Error("Recognize should not pass RapidOCR-specific preprocess flags to WinRT backend")
+    }
+
     executor := FakeExecutor(
         "STATUS=OK`n"
         . "TEXT_BEGIN`n"
@@ -152,7 +177,13 @@ try {
     if !InStr(backend.command, "python.exe")
         throw Error("RapidOCR backend command should reference bundled python.exe")
 
-    fallbackOcr := TextRecognizer("", "", A_ScriptDir)
+    fallbackRoot := A_ScriptDir "\tmp_fallback_runtime"
+    if DirExist(fallbackRoot)
+        DirDelete(fallbackRoot, 1)
+    DirCreate(fallbackRoot "\lib")
+    FileAppend "", fallbackRoot "\lib\ocr_capture.ps1"
+
+    fallbackOcr := TextRecognizer("", "", fallbackRoot)
     fallbackBackend := fallbackOcr.ResolveBackend()
     if (fallbackBackend.name != "winrt")
         throw Error("ResolveBackend should fall back to WinRT OCR when bundled runtime is missing")
@@ -160,8 +191,9 @@ try {
     probeGui.Destroy()
     WriteStatus(0)
     ExitApp(0)
-} catch {
+} catch as err {
     try probeGui.Destroy()
     WriteStatus(1)
+    WriteFailure(err.Message)
     ExitApp(1)
 }

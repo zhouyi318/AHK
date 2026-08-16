@@ -43,6 +43,8 @@ class Config {
         this.Paths.AssetsDir := IniRead(iniPath, "Paths", "AssetsDir", "assets")
         this.Paths.LogDir := IniRead(iniPath, "Paths", "LogDir", "logs")
         this.Paths.ScriptsDir := IniRead(iniPath, "Paths", "ScriptsDir", "scripts")
+
+        this.OcrRegions := this.ReadNamedRegionSection("OcrRegions")
     }
 
     SaveWindow(exeName, title, hwnd, w, h) {
@@ -79,6 +81,56 @@ class Config {
         this.Bot.Sim := Float(simValue)
     }
 
+    SaveNamedOcrRegion(name, region) {
+        normalizedName := Trim(name)
+        if (normalizedName = "")
+            return false
+        normalizedRegion := this.NormalizeRegion(region)
+        if !normalizedRegion
+            return false
+        this.WriteSectionValues("OcrRegions", Map(normalizedName, this.FormatRegion(normalizedRegion)))
+        this.OcrRegions[normalizedName] := normalizedRegion
+        return true
+    }
+
+    ListNamedOcrRegionNames() {
+        names := []
+        for name in this.OcrRegions
+            names.Push(name)
+        if (names.Length <= 1)
+            return names
+        text := ""
+        for index, name in names
+            text .= (index = 1 ? "" : "`n") . name
+        return StrSplit(Sort(text), "`n")
+    }
+
+    DeleteNamedOcrRegion(name) {
+        normalizedName := Trim(name)
+        if (normalizedName = "" || !this.OcrRegions.Has(normalizedName))
+            return false
+        this.RemoveSectionKeys("OcrRegions", Map(normalizedName, true))
+        this.OcrRegions.Delete(normalizedName)
+        return true
+    }
+
+    RenameNamedOcrRegion(oldName, newName) {
+        normalizedOld := Trim(oldName)
+        normalizedNew := Trim(newName)
+        if (normalizedOld = "" || normalizedNew = "")
+            return false
+        if !this.OcrRegions.Has(normalizedOld)
+            return false
+        if (normalizedNew != normalizedOld && this.OcrRegions.Has(normalizedNew))
+            return false
+        region := this.OcrRegions[normalizedOld]
+        this.RemoveSectionKeys("OcrRegions", Map(normalizedOld, true))
+        this.WriteSectionValues("OcrRegions", Map(normalizedNew, this.FormatRegion(region)))
+        this.OcrRegions.Delete(normalizedOld)
+        this.OcrRegions[normalizedNew] := region
+        return true
+    }
+
     ReadIniValue(section, key, defaultValue := "") {
         if !FileExist(this.iniPath)
             return defaultValue
@@ -105,6 +157,34 @@ class Config {
 
     ReadRegionValue(section, key) {
         return this.ParseRegionString(this.ReadIniValue(section, key, ""))
+    }
+
+    ReadNamedRegionSection(section) {
+        result := Map()
+        if !FileExist(this.iniPath)
+            return result
+        text := FileRead(this.iniPath, "UTF-8")
+        inSection := false
+        targetHeader := "[" section "]"
+        for _, line in StrSplit(text, "`n", "`r") {
+            trimmed := Trim(line)
+            if RegExMatch(trimmed, "^\[.*\]$") {
+                inSection := (trimmed = targetHeader)
+                continue
+            }
+            if (!inSection || trimmed = "")
+                continue
+            eqPos := InStr(line, "=")
+            if (eqPos <= 0)
+                continue
+            currentKey := Trim(SubStr(line, 1, eqPos - 1))
+            if (currentKey = "")
+                continue
+            region := this.ParseRegionString(SubStr(line, eqPos + 1))
+            if region
+                result[currentKey] := region
+        }
+        return result
     }
 
     ParseRegionString(raw) {
@@ -151,6 +231,43 @@ class Config {
         if (value > 1.00)
             value := 1.00
         return Format("{:.2f}", value)
+    }
+
+    RemoveSectionKeys(section, keys) {
+        if !FileExist(this.iniPath)
+            return
+        text := FileRead(this.iniPath, "UTF-8")
+        newline := InStr(text, "`r`n") ? "`r`n" : "`n"
+        lines := []
+        inSection := false
+        targetHeader := "[" section "]"
+
+        for _, line in StrSplit(text, "`n", "`r") {
+            trimmed := Trim(line)
+            if RegExMatch(trimmed, "^\[.*\]$") {
+                inSection := (trimmed = targetHeader)
+                lines.Push(line)
+                continue
+            }
+            if inSection {
+                eqPos := InStr(line, "=")
+                if (eqPos > 0) {
+                    currentKey := Trim(SubStr(line, 1, eqPos - 1))
+                    if keys.Has(currentKey)
+                        continue
+                }
+            }
+            lines.Push(line)
+        }
+
+        out := ""
+        for index, line in lines
+            out .= (index = 1 ? "" : newline) . line
+        if (out != "")
+            out .= newline
+        if FileExist(this.iniPath)
+            FileDelete(this.iniPath)
+        FileAppend out, this.iniPath, "UTF-8-RAW"
     }
 
     WriteSectionValues(section, values) {

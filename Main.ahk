@@ -26,12 +26,14 @@ CoordMode "Pixel", "Screen"
 #Include lib\ImageHelper.ahk
 #Include lib\WindowPicker.ahk
 #Include lib\RegionPicker.ahk
+#Include lib\PointPicker.ahk
 #Include lib\Recorder.ahk
 #Include lib\StepRecorders.ahk
 #Include lib\ScriptStore.ahk
 #Include lib\ScriptRepository.ahk
 #Include lib\FlowRepository.ahk
 #Include lib\Player.ahk
+#Include lib\CoordinateNavigator.ahk
 #Include lib\StepSchema.ahk
 #Include lib\StepRunner.ahk
 #Include lib\FlowRunner.ahk
@@ -49,6 +51,10 @@ class MainUiActionBridge {
     RunBot(*) {
         BtnRunToggle()
     }
+
+    InitWindowState(*) {
+        InitWindowState()
+    }
 }
 
 ; GUI 共享状态容器
@@ -62,11 +68,13 @@ global store := ScriptRepository(A_ScriptDir "\" cfg.Paths.ScriptsDir)
 global flowRepo := FlowRepository(A_ScriptDir "\" cfg.Paths.ScriptsDir "\flows")
 global playback := Player(img, cfg, appLogger)
 global ocrRecognizer := TextRecognizer(appLogger)
+global coordinateNavigatorService := CoordinateNavigator(playback, ocrRecognizer, appLogger)
 global wp := WindowPicker()
 global regionTool := RegionPicker()
+global pointTool := PointPicker()
 global rec := Recorder()
 global stepRecorderService := StepRecorders(rec)
-global stepRunnerService := StepRunner(playback, ocrRecognizer, appLogger)
+global stepRunnerService := StepRunner(playback, ocrRecognizer, appLogger, "", coordinateNavigatorService)
 global flowRunnerService := FlowRunner(stepRunnerService, store, appLogger)
 global mainUiActionBridgeService := MainUiActionBridge()
 appLogger.Info("启动来源 | script=" . A_ScriptFullPath . " | ahk=" . A_AhkPath . " | version=" . A_AhkVersion)
@@ -79,8 +87,9 @@ try {
         "playback", playback,
         "ocrRecognizer", ocrRecognizer,
         "regionTool", regionTool,
+        "pointTool", pointTool,
         "guiState", g,
-        "onBotSimChanged", "InitWindowState"
+        "onBotSimChanged", ObjBindMethod(mainUiActionBridgeService, "InitWindowState")
     ))
     appLogger.Info("ManualTools 创建成功")
 } catch as err {
@@ -108,7 +117,9 @@ global scriptEditorWorkspace := ScriptEditor(Map(
     "onRunBot", ObjBindMethod(mainUiActionBridgeService, "RunBot"),
     "onTestRegionFind", ObjBindMethod(manualToolService, "HandleTestRegionFind"),
     "onTestRegionOcr", ObjBindMethod(manualToolService, "HandleTestRegionOcr"),
-    "onPreviewRegionOcr", ObjBindMethod(manualToolService, "HandlePreviewRegionOcr"),
+        "onPreviewRegionOcr", ObjBindMethod(manualToolService, "HandlePreviewRegionOcr"),
+        "onCaptureCoordTemplates", ObjBindMethod(manualToolService, "HandleCaptureCoordTemplates"),
+        "onReadCoord", ObjBindMethod(manualToolService, "HandleReadCoord"),
     "onSetSim", ObjBindMethod(manualToolService, "HandleSetGlobalSim")
 ))
 global botRunner := Bot(cfg, appLogger, playback, store, stepRunnerService)

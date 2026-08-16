@@ -1,0 +1,2 @@
+﻿EXIT=1
+FAIL=ReadCurrentCoord should log the OCR text when coordinate parsing fails

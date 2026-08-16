@@ -8,7 +8,9 @@ class ManualTools {
         this.playback := deps.Has("playback") ? deps["playback"] : ""
         this.ocrRecognizer := deps.Has("ocrRecognizer") ? deps["ocrRecognizer"] : ""
         this.regionTool := deps.Has("regionTool") ? deps["regionTool"] : ""
+        this.pointTool := deps.Has("pointTool") ? deps["pointTool"] : ""
         this.guiState := deps.Has("guiState") ? deps["guiState"] : ""
+        this.regionManagerGui := ""
     }
 
     HandleConfigSystemImageRegions(*) {
@@ -58,17 +60,18 @@ class ManualTools {
         try WinWaitActive("ahk_id " this.cfg.Window.Hwnd, , 1)
         Sleep 150
 
-        result := this.ocrRecognizer.Recognize(this.cfg.Window.Hwnd, info.region, info.targetText, "手动 OCR 找字")
+        usePreprocess := info.HasProp("preprocess") ? info.preprocess : true
+        result := this.ocrRecognizer.Recognize(this.cfg.Window.Hwnd, info.region, info.targetText, "手动 OCR 找字", usePreprocess)
         if result.ok {
             displayText := this.ocrRecognizer.BuildDisplayText(result.text)
             if (result.reason = "NO_TEXT") {
-                MsgBox("OCR 已执行，但这个区域里没有识别到可用文本。`n`n目标文本: " . info.targetText . "`n区域: " . this.RegionSummary(info.region) . "`n`n识别文本:`n" . displayText . "`n`n这通常说明框选区域太大/太小、文字太糊、颜色对比不够，或者刚好没框到字。", "测试结果")
+                MsgBox("OCR 已执行，但这个区域里没有识别到可用文本。`n`n目标文本: " . info.targetText . "`n区域: " . this.RegionSummary(info.region) . "`n预处理: " . (usePreprocess ? "是" : "否") . "`n`n识别文本:`n" . displayText . "`n`n这通常说明框选区域太大/太小、文字太糊、颜色对比不够，或者刚好没框到字。", "测试结果")
             } else {
                 matchedText := result.matched ? "命中" : "未命中"
-                MsgBox("OCR 成功：`n目标文本: " . info.targetText . "`n匹配结果: " . matchedText . "`n区域: " . this.RegionSummary(info.region) . "`n`n识别文本:`n" . displayText, "测试结果")
+                MsgBox("OCR 成功：`n目标文本: " . info.targetText . "`n匹配结果: " . matchedText . "`n区域: " . this.RegionSummary(info.region) . "`n预处理: " . (usePreprocess ? "是" : "否") . "`n`n识别文本:`n" . displayText, "测试结果")
             }
         } else {
-            MsgBox("OCR 失败：`n目标文本: " . info.targetText . "`n区域: " . this.RegionSummary(info.region) . "`n错误: " . result.error, "测试结果")
+            MsgBox("OCR 失败：`n目标文本: " . info.targetText . "`n区域: " . this.RegionSummary(info.region) . "`n预处理: " . (usePreprocess ? "是" : "否") . "`n错误: " . result.error, "测试结果")
         }
     }
 
@@ -84,7 +87,7 @@ class ManualTools {
         try WinWaitActive("ahk_id " this.cfg.Window.Hwnd, , 1)
         Sleep 150
 
-        result := this.ocrRecognizer.Recognize(this.cfg.Window.Hwnd, info.region, "", "查看 OCR 文本")
+        result := this.ocrRecognizer.Recognize(this.cfg.Window.Hwnd, info.region, "", "查看 OCR 文本", info.HasProp("preprocess") ? info.preprocess : true)
         if !result.ok {
             MsgBox("OCR 失败：`n区域: " . this.RegionSummary(info.region) . "`n错误: " . result.error, "测试结果")
             return
@@ -110,8 +113,8 @@ class ManualTools {
             callback := this.deps["onBotSimChanged"]
             if IsObject(callback)
                 callback.Call()
-            else if (callback != "")
-                Func(callback).Call()
+            else
+                throw Error("onBotSimChanged must be a callable object, not a string")
         }
         this.appLogger.Info("已更新全局找图相似度: " . Format("{:.2f}", this.cfg.Bot.Sim))
         MsgBox("全局找图相似度已更新为 " . Format("{:.2f}", this.cfg.Bot.Sim) . "。", "提示")
@@ -338,7 +341,8 @@ class ManualTools {
             result: "",
             region: this.NormalizeRegionObject(initialRegion),
             prompt: "请在绑定窗口内拖拽框选要 OCR 的文字区域",
-            requireTargetText: requireTargetText
+            requireTargetText: requireTargetText,
+            preprocess: true
         }
         dlg.__state := state
 
@@ -356,6 +360,14 @@ class ManualTools {
         btnPick := dlg.Add("Button", "xm y+10 w120", "框选文字区域")
         btnPick.OnEvent("Click", ObjBindMethod(this, "OnTextOcrDialogPick"))
 
+        btnUseNamed := dlg.Add("Button", "x+8 yp w120", "引用已保存区域")
+        btnUseNamed.OnEvent("Click", ObjBindMethod(this, "OnTextOcrDialogUseNamedRegion"))
+
+        chkPreprocess := dlg.Add("CheckBox", "xm y+10 w380", "启用图像预处理（灰度+二值化+放大，适合传奇私服游戏文字）")
+        chkPreprocess.Value := 1
+        chkPreprocess.OnEvent("Click", ObjBindMethod(this, "OnTextOcrDialogPreprocessToggle"))
+        dlg.__chkPreprocess := chkPreprocess
+
         btnOk := dlg.Add("Button", "xm y+18 w90 Default", "确定")
         btnOk.OnEvent("Click", ObjBindMethod(this, "OnTextOcrDialogOk"))
 
@@ -363,12 +375,40 @@ class ManualTools {
         btnCancel.OnEvent("Click", ObjBindMethod(this, "OnTextOcrDialogCancel"))
         dlg.OnEvent("Close", ObjBindMethod(this, "OnTextOcrDialogCancel"))
 
-        dlg.Add("Text", "xm y+14 w400 h36", "建议：只框住文字本身，尽量缩小区域。OCR 对纯文字按钮/NPC 名称比图片匹配更稳，但仍会受字号和遮挡影响。")
+        dlg.Add("Text", "xm y+14 w400 h36", "建议：只框住文字本身，尽量缩小区域。传奇私服建议开启图像预处理。")
 
         dlg.Show("AutoSize Center")
         while !state.done
             Sleep 30
         return state.result
+    }
+
+    ShowClientPointDialog(title, initialPoint := "", prompt := "") {
+        if !this.EnsureBoundWindow()
+            return ""
+        if !IsObject(this.pointTool)
+            return ""
+
+        state := {done: false, result: ""}
+        pickPrompt := Trim(prompt)
+        if (pickPrompt = "")
+            pickPrompt := title != "" ? title : "请在绑定窗口内点一下要记录的位置"
+        if IsObject(initialPoint) && initialPoint.HasProp("x") && initialPoint.HasProp("y")
+            pickPrompt .= "`n当前: " initialPoint.x "," initialPoint.y
+
+        if !this.pointTool.Start(this.cfg.Window.Hwnd, ObjBindMethod(this, "OnClientPointPicked", state), pickPrompt)
+            return ""
+
+        while (!state.done && this.pointTool.active)
+            Sleep 30
+        return state.done ? state.result : ""
+    }
+
+    OnClientPointPicked(state, point) {
+        state.result := point
+        state.done := true
+        if IsObject(this.pointTool) && this.pointTool.active
+            this.pointTool.Stop(false)
     }
 
     OnRegionDialogPick(ctrl, *) {
@@ -461,6 +501,16 @@ class ManualTools {
         dlg.__txtRegion.Text := "搜索区域: " . this.RegionSummary(state.region)
     }
 
+    OnTextOcrDialogUseNamedRegion(ctrl, *) {
+        dlg := ctrl.Gui
+        regionInfo := this.ChooseNamedOcrRegion()
+        if !IsObject(regionInfo)
+            return
+        state := dlg.__state
+        state.region := this.NormalizeRegionObject(regionInfo.region)
+        dlg.__txtRegion.Text := "搜索区域: " . this.RegionSummary(state.region) . " [" . regionInfo.name . "]"
+    }
+
     OnTextOcrDialogOk(ctrl, *) {
         dlg := ctrl.Gui
         state := dlg.__state
@@ -477,11 +527,15 @@ class ManualTools {
             return
         }
 
-        state.result := {targetText: targetText, region: state.region}
+        state.result := {targetText: targetText, region: state.region, preprocess: state.preprocess}
         state.done := true
         if (this.regionTool.active)
             this.regionTool.Stop(false)
         dlg.Destroy()
+    }
+
+    OnTextOcrDialogPreprocessToggle(ctrl, *) {
+        ctrl.Gui.__state.preprocess := ctrl.Value
     }
 
     ShowOcrPreviewResult(region, result) {
@@ -491,6 +545,7 @@ class ManualTools {
 
         displayText := this.ocrRecognizer.BuildDisplayText(result.text)
         dlg.__ocrText := displayText
+        dlg.__ocrRegion := this.NormalizeRegionObject(region)
 
         dlg.Add("Text", "xm ym w420", "区域: " . this.RegionSummary(region))
         if (result.reason = "NO_TEXT")
@@ -504,6 +559,9 @@ class ManualTools {
         btnCopy := dlg.Add("Button", "xm y+14 w90 Default", "复制文本")
         btnCopy.OnEvent("Click", ObjBindMethod(this, "OnOcrPreviewCopy"))
 
+        btnSaveRegion := dlg.Add("Button", "x+8 yp w140", "保存为命名 OCR 区域")
+        btnSaveRegion.OnEvent("Click", ObjBindMethod(this, "OnOcrPreviewSaveRegion"))
+
         btnClose := dlg.Add("Button", "x+8 yp w90", "关闭")
         btnClose.OnEvent("Click", ObjBindMethod(this, "OnOcrPreviewClose"))
         dlg.OnEvent("Close", ObjBindMethod(this, "OnOcrPreviewClose"))
@@ -515,6 +573,30 @@ class ManualTools {
         dlg := ctrl.Gui
         A_Clipboard := dlg.__ocrText
         MsgBox("OCR 文本已复制到剪贴板。", "提示")
+    }
+
+    OnOcrPreviewSaveRegion(ctrl, *) {
+        dlg := ctrl.Gui
+        region := dlg.__ocrRegion
+        if !region {
+            MsgBox("当前没有可保存的 OCR 区域。", "提示")
+            return
+        }
+        ib := InputBox("请输入 OCR 区域名称，后续写脚本时可直接引用：", "保存命名 OCR 区域")
+        if (ib.Result = "Cancel")
+            return
+        name := Trim(ib.Value)
+        if (name = "") {
+            MsgBox("区域名称不能为空。", "提示")
+            return
+        }
+        if !this.SaveNamedOcrRegion(name, region) {
+            MsgBox("保存失败，请确认当前区域和配置对象有效。", "提示")
+            return
+        }
+        if IsObject(this.appLogger)
+            this.appLogger.Info("已保存命名 OCR 区域: " . name . " " . this.RegionSummary(region))
+        MsgBox("已保存命名 OCR 区域：" . name, "提示")
     }
 
     OnOcrPreviewClose(guiObj, *) {
@@ -541,5 +623,341 @@ class ManualTools {
         if IsObject(this.guiState) && this.guiState.HasOwnProp("gui")
             return this.guiState.gui.Hwnd
         return 0
+    }
+
+    ChooseNamedOcrRegion() {
+        if !(IsObject(this.cfg) && this.cfg.HasProp("OcrRegions"))
+            return ""
+        names := this.cfg.ListNamedOcrRegionNames()
+        if (names.Length = 0) {
+            MsgBox("还没有保存过命名 OCR 区域。请先在“查看 OCR 文本”结果里保存一块区域。", "提示")
+            return ""
+        }
+
+        dlg := Gui(, "选择命名 OCR 区域")
+        dlg.Opt("+Owner" this.GetOwnerHwnd())
+        dlg.SetFont("s10")
+        state := {done: false, result: ""}
+        dlg.__state := state
+
+        dlg.Add("Text", "xm ym w360 h36", "请选择一块已经确认过的 OCR 区域。选中后会直接带入当前 OCR 或坐标识别配置。")
+        listText := ""
+        for index, name in names
+            listText .= (index = 1 ? "" : "|") . name
+        lbNames := dlg.Add("ListBox", "xm y+10 w360 r8", StrSplit(listText, "|"))
+        lbNames.Choose(1)
+        dlg.__lbNames := lbNames
+
+        btnUse := dlg.Add("Button", "xm y+14 w90 Default", "使用")
+        btnUse.OnEvent("Click", ObjBindMethod(this, "OnChooseNamedOcrRegionOk"))
+
+        btnCancel := dlg.Add("Button", "x+8 yp w90", "取消")
+        btnCancel.OnEvent("Click", ObjBindMethod(this, "OnChooseNamedOcrRegionCancel"))
+        dlg.OnEvent("Close", ObjBindMethod(this, "OnChooseNamedOcrRegionCancel"))
+
+        btnManage := dlg.Add("Button", "x+8 yp w120", "管理已保存区域")
+        btnManage.OnEvent("Click", ObjBindMethod(this, "ShowNamedOcrRegionManager"))
+
+        dlg.Show("AutoSize Center")
+        while !state.done
+            Sleep 30
+        return state.result
+    }
+
+    OnChooseNamedOcrRegionOk(ctrl, *) {
+        dlg := ctrl.Gui
+        state := dlg.__state
+        name := Trim(dlg.__lbNames.Text)
+        if (name = "") {
+            MsgBox("请先选择一个已保存区域。", "提示")
+            return
+        }
+        if !this.cfg.OcrRegions.Has(name) {
+            MsgBox("所选区域不存在，请重新选择。", "提示")
+            return
+        }
+        state.result := {name: name, region: this.cfg.OcrRegions[name]}
+        state.done := true
+        dlg.Destroy()
+    }
+
+    OnChooseNamedOcrRegionCancel(guiObj, *) {
+        state := guiObj.__state
+        state.done := true
+        guiObj.Destroy()
+    }
+
+    SaveNamedOcrRegion(name, region) {
+        if !(IsObject(this.cfg) && this.cfg.HasProp("OcrRegions"))
+            return false
+        return this.cfg.SaveNamedOcrRegion(name, region)
+    }
+
+    DeleteNamedOcrRegion(name) {
+        if !(IsObject(this.cfg) && this.cfg.HasProp("OcrRegions"))
+            return false
+        return this.cfg.DeleteNamedOcrRegion(name)
+    }
+
+    RenameNamedOcrRegion(oldName, newName) {
+        if !(IsObject(this.cfg) && this.cfg.HasProp("OcrRegions"))
+            return false
+        return this.cfg.RenameNamedOcrRegion(oldName, newName)
+    }
+
+    ShowNamedOcrRegionManager() {
+        if !(IsObject(this.cfg) && this.cfg.HasProp("OcrRegions")) {
+            MsgBox("配置对象不可用，无法管理已保存的 OCR 区域。", "提示")
+            return
+        }
+        this.RebuildNamedOcrRegionManager()
+    }
+
+    RebuildNamedOcrRegionManager() {
+        if IsObject(this.regionManagerGui)
+            this.regionManagerGui.Destroy()
+
+        names := this.cfg.ListNamedOcrRegionNames()
+        dlg := Gui(, "管理已保存 OCR 区域")
+        dlg.Opt("+Owner" this.GetOwnerHwnd())
+        dlg.SetFont("s10")
+
+        if (names.Length = 0) {
+            dlg.Add("Text", "xm ym w460 h36", "还没有保存过命名 OCR 区域。请先在“查看 OCR 文本”结果里保存一块区域。")
+        } else {
+            dlg.Add("Text", "xm ym w460 h22", "已保存的 OCR 区域列表。重命名或删除后立即生效，已写入脚本的步骤不受影响。")
+            for _, name in names {
+                region := this.cfg.OcrRegions[name]
+                dlg.Add("Text", "xm y+12 w170 h22", name ":")
+                dlg.Add("Text", "x+8 yp w160 h22", this.RegionSummary(region))
+                btnRename := dlg.Add("Button", "x+8 yp-4 w80", "重命名")
+                btnRename.__regionName := name
+                btnRename.OnEvent("Click", ObjBindMethod(this, "OnNamedOcrRegionRename"))
+                btnDelete := dlg.Add("Button", "x+8 yp w80", "删除")
+                btnDelete.__regionName := name
+                btnDelete.OnEvent("Click", ObjBindMethod(this, "OnNamedOcrRegionDelete"))
+            }
+        }
+
+        btnClose := dlg.Add("Button", "xm y+18 w90 Default", "关闭")
+        btnClose.OnEvent("Click", ObjBindMethod(this, "OnNamedOcrRegionManagerClose"))
+        dlg.OnEvent("Close", ObjBindMethod(this, "OnNamedOcrRegionManagerClose"))
+
+        this.regionManagerGui := dlg
+        dlg.Show("AutoSize Center")
+    }
+
+    OnNamedOcrRegionRename(ctrl, *) {
+        name := ctrl.__regionName
+        ib := InputBox("请输入新的区域名称：", "重命名 OCR 区域", , name)
+        if (ib.Result = "Cancel")
+            return
+        newName := Trim(ib.Value)
+        if (newName = "" || newName = name)
+            return
+        if !this.RenameNamedOcrRegion(name, newName) {
+            MsgBox("重命名失败：新名称可能已存在，或原区域已被移除。", "提示")
+            return
+        }
+        if IsObject(this.appLogger)
+            this.appLogger.Info("已重命名命名 OCR 区域: " name " -> " newName)
+        this.RebuildNamedOcrRegionManager()
+    }
+
+    OnNamedOcrRegionDelete(ctrl, *) {
+        name := ctrl.__regionName
+        result := MsgBox("确定删除已保存区域「" name "」吗？已写入脚本的步骤不受影响。", "删除 OCR 区域", "YesNo Icon! Default2")
+        if (result != "Yes")
+            return
+        if !this.DeleteNamedOcrRegion(name) {
+            MsgBox("删除失败：区域可能已被移除。", "提示")
+            return
+        }
+        if IsObject(this.appLogger)
+            this.appLogger.Info("已删除命名 OCR 区域: " name)
+        this.RebuildNamedOcrRegionManager()
+    }
+
+    OnNamedOcrRegionManagerClose(guiObj, *) {
+        guiObj.Destroy()
+        this.regionManagerGui := ""
+    }
+
+    HandleCaptureCoordTemplates(*) {
+        if !this.EnsureBoundWindow()
+            return
+
+        ; Ask for the expected coordinate text
+        coordText := InputBox("请输入当前坐标框内显示的实际坐标值（例如 334:333）。`n`n确保你在游戏中能看到坐标数字，并且已经绑定了正确的窗口。", "截取坐标模板", "w400 h160")
+        if (coordText.Result != "OK" || Trim(coordText.Value) = "")
+            return
+
+        label := Trim(coordText.Value)
+        ; Validate format: digits:digits or digits,digits
+        if !RegExMatch(label, "^\d{2,4}[:.,]\d{2,4}$") {
+            MsgBox("坐标格式不正确。请使用类似 334:333 或 334,333 的格式。", "提示")
+            return
+        }
+
+        ; Replace common separators with colon
+        label := RegExReplace(label, "[.,]", ":")
+        digitCount := StrLen(StrReplace(label, ":", ""))
+
+        ; Use the region picker to select the coordinate area
+        hwnd := this.cfg.Window.Hwnd
+        WinActivate "ahk_id " hwnd
+        Sleep 150
+        this.regionTool.Start(hwnd, ObjBindMethod(this, "OnCaptureCoordTemplateRegionPicked"), "按住鼠标左键拖拽框选坐标数字，松手完成截取。ESC 取消")
+        this._captureCoordLabel := label
+        if IsObject(this.appLogger)
+            this.appLogger.Info("模板截取: 请在游戏窗口内框选坐标数字区域（期望值: " label "）")
+    }
+
+    OnCaptureCoordTemplateRegionPicked(region) {
+        label := this._captureCoordLabel
+        this._captureCoordLabel := ""
+
+        hwnd := this.cfg.Window.Hwnd
+        rect := this.ocrRecognizer.ResolveScreenRect(hwnd, region)
+        if !rect {
+            MsgBox("无法获取屏幕坐标，请重试。", "错误")
+            return
+        }
+
+        pythonPath := this.ocrRecognizer.rapidPythonPath
+        captureScript := this.ocrRecognizer.rootDir "\lib\coord_template_capture.py"
+        cmd := this.ocrRecognizer.QuoteArg(pythonPath)
+            . " " this.ocrRecognizer.QuoteArg(captureScript)
+            . " --x " rect.x
+            . " --y " rect.y
+            . " --width " rect.width
+            . " --height " rect.height
+            . " --label " this.ocrRecognizer.QuoteArg(label)
+
+        if IsObject(this.appLogger)
+            this.appLogger.Info("模板截取: 执行 " cmd)
+        try {
+            shell := ComObject("WScript.Shell")
+            shell.Run(cmd, 1, true)
+            templateDir := this.ocrRecognizer.coordTemplateDir
+
+            ; Show capture error if the python script aborted (split mismatch)
+            errFile := templateDir "\_capture_error.txt"
+            if FileExist(errFile) {
+                try {
+                    errText := FileRead(errFile, "UTF-8")
+                    MsgBox("模板截取失败！`n`n" errText, "模板截取")
+                    return
+                }
+            }
+
+            ; Check what was actually created
+            createdFiles := ""
+            missingFiles := ""
+            loop 10 {
+                fname := templateDir "\" (A_Index - 1) ".png"
+                if FileExist(fname)
+                    createdFiles .= (createdFiles = "" ? "" : ", ") (A_Index - 1)
+                else
+                    missingFiles .= (missingFiles = "" ? "" : ", ") (A_Index - 1)
+            }
+            colonFile := templateDir "\colon.png"
+            if FileExist(colonFile)
+                createdFiles .= ", :"
+            else
+                missingFiles .= ", :"
+
+            msg := "模板截取完成！`n`n期望坐标: " label
+            if (createdFiles != "")
+                msg .= "`n已生成: " createdFiles
+            if (missingFiles != "")
+                msg .= "`n缺失: " missingFiles "`n`n请在游戏中去一个包含缺失数字的坐标，重新截取。"
+            else
+                msg .= "`n`n模板已全部生成！点击「读坐标」按钮测试效果。"
+            MsgBox(msg, "模板截取")
+        } catch as err {
+            MsgBox("模板截取失败: " err.Message, "错误")
+        }
+    }
+
+    OnCaptureCoordTemplateRegionCancelled(*) {
+        this._captureCoordLabel := ""
+        if IsObject(this.appLogger)
+            this.appLogger.Info("模板截取: 已取消")
+    }
+
+    HandleReadCoord(*) {
+        if !this.EnsureBoundWindow()
+            return
+
+        hwnd := this.cfg.Window.Hwnd
+        WinActivate "ahk_id " hwnd
+        Sleep 150
+        this.regionTool.Start(hwnd, ObjBindMethod(this, "OnReadCoordRegionPicked"), "框选坐标数字区域，松手即读")
+    }
+
+    OnReadCoordRegionPicked(region) {
+        hwnd := this.cfg.Window.Hwnd
+
+        ; Check if templates exist, use them if available
+        hasTemplates := this.ocrRecognizer.HasCoordTemplates()
+        method := hasTemplates ? "模板匹配" : "OCR"
+
+        if hasTemplates {
+            result := this.ocrRecognizer.ReadCoordByTemplate(hwnd, region)
+        } else {
+            result := this.ocrRecognizer.Recognize(hwnd, region, "", "读坐标-OCR", true)
+        }
+
+        if !result.ok {
+            MsgBox("读取失败 [" method "]`n`n错误: " result.error, "读坐标")
+            return
+        }
+        if (Trim(result.text) = "") {
+            MsgBox("未识别到文本 [" method "]`n`n区域可能没有文字，请重新框选。", "读坐标")
+            return
+        }
+
+        ; Try to parse as coordinates
+        parsed := this.ParseCoordTextForDisplay(result.text)
+        displayText := "原始文本: " result.text "`n`n"
+        if parsed.ok {
+            displayText .= "解析坐标: " parsed.x "," parsed.y
+        } else {
+            displayText .= "解析: 无法识别为坐标格式"
+        }
+        displayText .= "`n`n识别方式: " method
+        if hasTemplates {
+            displayText .= "`n模板目录: " this.ocrRecognizer.coordTemplateDir
+        } else {
+            displayText .= "`n提示: 点击「截模板」创建模板后可获得更高准确率"
+        }
+
+        MsgBox(displayText, "读坐标 - " method)
+    }
+
+    ParseCoordTextForDisplay(rawText) {
+        text := StrUpper(rawText)
+        text := StrReplace(text, "O", "0")
+        text := StrReplace(text, "I", "1")
+        text := StrReplace(text, "L", "1")
+        text := StrReplace(text, "S", "5")
+        text := StrReplace(text, "Z", "2")
+        text := StrReplace(text, "B", "8")
+        text := StrReplace(text, ":", " ")
+        text := StrReplace(text, ",", " ")
+        text := RegExReplace(text, "\s+", " ")
+        text := RegExReplace(text, "[^0-9 ]", "")
+        text := Trim(text)
+        text := StrReplace(text, " ", ",")
+
+        if RegExMatch(text, "(\d{1,4})\D+(\d{1,4})", &m) {
+            return {ok: true, x: Integer(m[1]), y: Integer(m[2])}
+        }
+        if RegExMatch(text, "^\d{4,6}$") {
+            mid := Floor(StrLen(text) / 2)
+            return {ok: true, x: Integer(SubStr(text, 1, mid)), y: Integer(SubStr(text, mid + 1))}
+        }
+        return {ok: false}
     }
 }
