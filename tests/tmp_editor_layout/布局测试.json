@@ -1,0 +1,1 @@
+﻿{"enabled":1,"id":"script_布局测试","metadata":{"notes":"","targetMapImage":"","targetMapRegion":""},"name":"布局测试","steps":[{"enabled":1,"id":"step_87898234","name":"点击","onFailure":{"action":"stop"},"onSuccess":{"action":"next"},"params":{"button":"L","delay":4469,"x":394,"y":238},"type":"click"}],"type":"enter_map"}

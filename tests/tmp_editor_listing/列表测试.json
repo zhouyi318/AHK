@@ -1,0 +1,1 @@
+﻿{"enabled":1,"id":"script_列表测试","metadata":{"notes":"","targetMapImage":"","targetMapRegion":""},"name":"列表测试","steps":[{"enabled":1,"id":"step_90924171","name":"等待","onFailure":{"action":"stop"},"onSuccess":{"action":"next"},"params":{"ms":1000},"type":"wait"}],"type":"enter_map"}
