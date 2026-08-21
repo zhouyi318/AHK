@@ -1,2 +1,5 @@
 logs/
 tools/rapidocr/downloads/
+.qoder/
+tests/tmp_*/
+tests/tmp_*.txt

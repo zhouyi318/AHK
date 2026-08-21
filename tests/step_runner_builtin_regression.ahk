@@ -30,8 +30,13 @@ class FakePlayer {
         return true
     }
 
-    DoClientMouseAction(hwnd, x, y, button, action, holdMs := 0) {
-        this.calls.Push("mouse_action:" x ":" y ":" button ":" action ":" holdMs)
+    DoPhysicalClientClick(hwnd, x, y, button, repeat := 1, intervalMs := 0, delayMs := 0) {
+        this.calls.Push("click:" x ":" y ":" button ":" repeat ":" intervalMs ":" delayMs)
+        return true
+    }
+
+    DoClientMouseAction(hwnd, x, y, button, action, holdMs := 0, delayMs := 0) {
+        this.calls.Push("mouse_action:" x ":" y ":" button ":" action ":" holdMs ":" delayMs)
         return true
     }
 
@@ -92,9 +97,9 @@ try {
 
     clickOk := runner.RunSingleStep({id: "c1", type: "click", params: {x: 10, y: 20, button: "R", delay: 0, repeat: 3, intervalMs: 80}, onSuccess: {action: "next"}, onFailure: {action: "stop"}}, 123)
     if !clickOk.ok
-        throw Error("click step should delegate to Player.DoClientClick")
-    if (player.calls[1] != "click:10:20:R:3:80")
-        throw Error("click step should pass repeat and intervalMs to Player.DoClientClick")
+        throw Error("click step should delegate to Player.DoPhysicalClientClick")
+    if (player.calls[1] != "click:10:20:R:3:80:0")
+        throw Error("click step should pass repeat, intervalMs and delay to Player.DoPhysicalClientClick")
 
     findOk := runner.RunSingleStep({id: "f1", type: "find_image", params: {image: "ok.bmp", region: "", sim: 0.7, timeout: 1000}, onSuccess: {action: "next"}, onFailure: {action: "stop"}}, 123)
     if !findOk.ok
@@ -111,7 +116,7 @@ try {
     mouseActionOk := runner.RunSingleStep({id: "m1", type: "mouse_action", params: {x: 15, y: 25, button: "R", action: "hold", holdMs: 240, delay: 0}, onSuccess: {action: "next"}, onFailure: {action: "stop"}}, 123)
     if !mouseActionOk.ok
         throw Error("mouse_action step should delegate to Player.DoClientMouseAction")
-    if (player.calls[5] != "mouse_action:15:25:R:hold:240")
+    if (player.calls[5] != "mouse_action:15:25:R:hold:240:0")
         throw Error("mouse_action step should pass hold parameters to Player.DoClientMouseAction")
 
     ocrOk := runner.RunSingleStep({id: "o1", type: "ocr_match", params: {targetText: "开始", region: "", timeout: 1000}, onSuccess: {action: "next"}, onFailure: {action: "stop"}}, 123)
@@ -143,6 +148,18 @@ try {
     moveFail := runner.RunSingleStep({id: "n2", type: "move_to_coord", params: {coordRegion: {x1: 9, y1: 9, x2: 19, y2: 19}, targetX: 120, targetY: 220, playerCenterX: 320, playerCenterY: 420, clickOffsetPx: 200, ocrEveryClicks: 7, tolerance: 1, timeoutMs: 3000}, onSuccess: {action: "next"}, onFailure: {action: "stop"}}, 123)
     if moveFail.ok
         throw Error("move_to_coord step should fail when CoordinateNavigator reports an unfinished move")
+
+    delayClickOk := runner.RunSingleStep({id: "c2", type: "click", params: {x: 11, y: 21, button: "L", delay: 1200, repeat: 2, intervalMs: 90}, onSuccess: {action: "next"}, onFailure: {action: "stop"}}, 123)
+    if !delayClickOk.ok
+        throw Error("click step with delay should still delegate to Player")
+    if (player.calls[player.calls.Length] != "click:11:21:L:2:90:1200")
+        throw Error("click step should pass the recorded delay so the player waits after moving the cursor")
+
+    delayMouseOk := runner.RunSingleStep({id: "m2", type: "mouse_action", params: {x: 16, y: 26, button: "R", action: "hold", holdMs: 100, delay: 350}, onSuccess: {action: "next"}, onFailure: {action: "stop"}}, 123)
+    if !delayMouseOk.ok
+        throw Error("mouse_action step with delay should still delegate to Player")
+    if (player.calls[player.calls.Length] != "mouse_action:16:26:R:hold:100:350")
+        throw Error("mouse_action step should pass the recorded delay so the player waits after moving the cursor")
 
     WriteStatus(0)
     ExitApp(0)

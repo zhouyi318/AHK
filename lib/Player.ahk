@@ -106,7 +106,8 @@ class Player {
     }
 
     ; 物理点击：激活窗口后用真实鼠标点击（游戏可能忽略后台左键消息）
-    DoPhysicalClientClick(hwnd, x, y, button, repeat := 1, intervalMs := 0) {
+    ; 顺序：移动鼠标到坐标 -> 延迟 delayMs -> 执行 repeat 次点击（间隔 intervalMs）
+    DoPhysicalClientClick(hwnd, x, y, button, repeat := 1, intervalMs := 0, delayMs := 0) {
         if !hwnd || !WinExist("ahk_id " hwnd) {
             this.log.Warn("物理点击失败: 窗口不存在 hwnd=" hwnd)
             return false
@@ -116,8 +117,16 @@ class Player {
             return false
         }
         try WinActivate("ahk_id " hwnd)
-        Sleep 50
+        Sleep 300
+        CoordMode("Mouse", "Screen")
+        SendMode("Event")  ; 老游戏对 Event 模式兼容性更好
         MouseMove(screenX, screenY, 0)
+        Sleep 50
+        preClickDelay := delayMs is Number ? Integer(delayMs) : 0
+        if (preClickDelay < 0)
+            preClickDelay := 0
+        if (preClickDelay > 0)
+            Sleep preClickDelay
         buttonName := (button = "R") ? "Right" : "Left"
         clickCount := repeat is Number ? Integer(repeat) : 1
         if (clickCount < 1)
@@ -126,15 +135,19 @@ class Player {
         if (interval < 0)
             interval := 0
         Loop clickCount {
-            Click(buttonName)
+            ; 显式 down/up，比 MouseClick 更可靠（部分游戏需要完整按下-抬起序列）
+            MouseClick(buttonName, screenX, screenY, , 0, "D")
+            Sleep 60
+            MouseClick(buttonName, screenX, screenY, , 0, "U")
             if (A_Index < clickCount && interval > 0)
                 Sleep interval
         }
-        this.log.Info("物理点击执行: (" x "," y ") 按钮=" buttonName " 次数=" clickCount)
+        this.log.Info("物理点击执行: (" x "," y ") 屏幕=(" screenX "," screenY ") 按钮=" buttonName " 次数=" clickCount (preClickDelay > 0 ? " 点击前延迟=" preClickDelay "ms" : ""))
         return true
     }
 
-    DoClientMouseAction(hwnd, x, y, button, action, holdMs := 0) {
+    ; 顺序：移动鼠标到坐标 -> 延迟 delayMs -> 执行按下/按住/抬起
+    DoClientMouseAction(hwnd, x, y, button, action, holdMs := 0, delayMs := 0) {
         if !hwnd || !WinExist("ahk_id " hwnd)
             return false
         WinGetClientPos(&cx, &cy, &cw, &ch, "ahk_id " hwnd)
@@ -142,6 +155,11 @@ class Player {
             return false
         if !this.MoveCursorToClient(hwnd, x, y)
             return false
+        preActionDelay := delayMs is Number ? Integer(delayMs) : 0
+        if (preActionDelay < 0)
+            preActionDelay := 0
+        if (preActionDelay > 0)
+            Sleep preActionDelay
 
         buttonToken := this.ResolveMouseButtonToken(button)
         if (buttonToken = "")
