@@ -12,6 +12,8 @@ try {
         throw Error("Main should bind the pick-window action through the UI action bridge")
     if !InStr(source, '"onRunBot", ObjBindMethod(mainUiActionBridgeService, "RunBot")')
         throw Error("Main should bind the run-bot action through the UI action bridge")
+    if !InStr(source, 'InitWindowState(*) {')
+        throw Error("MainUiActionBridge should expose an InitWindowState callback method for ManualTools refreshes")
     if InStr(source, "global mainUiActionBridge := MainUiActionBridge()")
         throw Error("Main should not reuse the class name as a case-insensitive global variable")
     if (bridgePos = 0 || returnPos = 0 || bridgePos > returnPos)

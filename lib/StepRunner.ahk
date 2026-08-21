@@ -1,20 +1,31 @@
 #Requires AutoHotkey v2.0
 
 class StepRunner {
-    __New(player, ocr, logger, customExecutor := "") {
+    __New(player, ocr, logger, customExecutor := "", navigator := "") {
         this.player := player
         this.ocr := ocr
         this.log := logger
         this.customExecutor := customExecutor
+        this.navigator := navigator
     }
 
     RunSingleStep(step, hwnd) {
         ok := this.ExecuteStep(step, hwnd)
+        if IsObject(this.log)
+            this.log.Info("步骤 " step.id " [" step.type "] " (ok ? "成功" : "失败"))
         return {
             ok: ok,
             stepId: step.id,
             nextAction: ok ? step.onSuccess : step.onFailure
         }
+    }
+
+    CalibrateMoveToCoordStep(step, hwnd) {
+        return {ok: false, reason: "UNSUPPORTED_IN_CLICK_MODE"}
+    }
+
+    DiagnoseMoveToCoordDirection(step, hwnd) {
+        return {ok: false, reason: "UNSUPPORTED_IN_CLICK_MODE"}
     }
 
     RunScript(script, hwnd, startIndex := 1) {
@@ -30,8 +41,11 @@ class StepRunner {
             result := this.RunSingleStep(step, hwnd)
             lastStepId := step.id
             if !result.ok {
-                if (result.nextAction.action = "stop")
+                if (result.nextAction.action = "stop") {
+                    if IsObject(this.log)
+                        this.log.Warn("脚本在步骤 " step.id " [" step.type "] 失败后停止")
                     return {ok: false, failedStepId: step.id, lastStepId: lastStepId}
+                }
                 index := this.ResolveNextIndex(script.steps, index, result.nextAction)
                 continue
             }
@@ -50,10 +64,20 @@ class StepRunner {
                 Sleep(params.HasProp("ms") ? params.ms : 0)
                 return true
             case "click":
-                return this.player.DoClientClick(hwnd
+                ; 游戏忽略后台左键消息，使用物理点击（激活窗口+真实鼠标）
+                return this.player.DoPhysicalClientClick(hwnd
                     , params.HasProp("x") ? params.x : 0
                     , params.HasProp("y") ? params.y : 0
-                    , params.HasProp("button") ? params.button : "L")
+                    , params.HasProp("button") ? params.button : "L"
+                    , params.HasProp("repeat") ? params.repeat : 1
+                    , params.HasProp("intervalMs") ? params.intervalMs : 0)
+            case "mouse_action":
+                return this.player.DoClientMouseAction(hwnd
+                    , params.HasProp("x") ? params.x : 0
+                    , params.HasProp("y") ? params.y : 0
+                    , params.HasProp("button") ? params.button : "R"
+                    , params.HasProp("action") ? params.action : "hold"
+                    , params.HasProp("holdMs") ? params.holdMs : 0)
             case "find_image":
                 return this.player.FindPic(
                     params.HasProp("image") ? params.image : "",
@@ -79,6 +103,25 @@ class StepRunner {
                     ""
                 )
                 return result.ok && result.matched
+            case "move_to_coord":
+                if !this.navigator
+                    return false
+                result := this.navigator.MoveTo(
+                    hwnd,
+                    params.HasProp("coordRegion") ? params.coordRegion : "",
+                    params.HasProp("targetX") ? params.targetX : 0,
+                    params.HasProp("targetY") ? params.targetY : 0,
+                    params.HasProp("playerCenterX") ? params.playerCenterX : 0,
+                    params.HasProp("playerCenterY") ? params.playerCenterY : 0,
+                    params.HasProp("clickOffsetPx") ? params.clickOffsetPx : 200,
+                    params.HasProp("ocrEveryClicks") ? params.ocrEveryClicks : 6,
+                    params.HasProp("tolerance") ? params.tolerance : 1,
+                    params.HasProp("timeoutMs") ? params.timeoutMs : 15000,
+                    params.HasProp("ocrRetryCount") ? params.ocrRetryCount : 2,
+                    params.HasProp("ocrRetryIntervalMs") ? params.ocrRetryIntervalMs : 150,
+                    params.HasProp("stuckRounds") ? params.stuckRounds : 3
+                )
+                return IsObject(result) && result.ok
             case "branch":
                 return this.ExecuteBranchStep(params, hwnd)
             default:

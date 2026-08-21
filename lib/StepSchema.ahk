@@ -21,6 +21,8 @@ class StepSchema {
                 return "等待"
             case "keypress":
                 return "按键"
+            case "mouse_action":
+                return "按住"
             case "mouse_move":
                 return "移动鼠标"
             case "mouse_wheel":
@@ -31,6 +33,8 @@ class StepSchema {
                 return "图片点击"
             case "ocr_match":
                 return "OCR 识别"
+            case "move_to_coord":
+                return "移动到坐标"
             case "branch":
                 return "条件分支"
             default:
@@ -41,11 +45,13 @@ class StepSchema {
     static DefaultParams(type) {
         switch type {
             case "click":
-                return {x: 0, y: 0, button: "L", delay: 0}
+                return {x: 0, y: 0, button: "L", delay: 0, repeat: 1, intervalMs: 0}
             case "wait":
                 return {ms: 1000}
             case "keypress":
                 return {keyName: "", repeat: 1}
+            case "mouse_action":
+                return {x: 0, y: 0, button: "R", action: "hold", holdMs: 0, delay: 0}
             case "mouse_move":
                 return {x: 0, y: 0, speed: 0}
             case "mouse_wheel":
@@ -56,6 +62,21 @@ class StepSchema {
                 return {image: "", region: "", sim: 0.7, timeout: 10000, button: "L"}
             case "ocr_match":
                 return {targetText: "", region: "", timeout: 10000, matchMode: "contains"}
+            case "move_to_coord":
+                return {
+                    coordRegion: "",
+                    targetX: 0,
+                    targetY: 0,
+                    playerCenterX: 0,
+                    playerCenterY: 0,
+                    clickOffsetPx: 200,
+                    ocrEveryClicks: 6,
+                    ocrRetryCount: 2,
+                    ocrRetryIntervalMs: 150,
+                    stuckRounds: 3,
+                    tolerance: 1,
+                    timeoutMs: 15000
+                }
             case "branch":
                 return {conditionType: "ocr_match", targetText: "", image: "", region: "", sim: 0.7, timeout: 10000, matchMode: "contains"}
             default:

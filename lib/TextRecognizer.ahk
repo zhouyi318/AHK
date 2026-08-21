@@ -9,7 +9,90 @@ class TextRecognizer {
         this.helperScriptPath := this.rootDir "\lib\ocr_capture.ps1"
         this.rapidRunnerPath := this.rootDir "\lib\rapidocr_runner.py"
         this.rapidPythonPath := this.rootDir "\tools\rapidocr\python\python.exe"
+        this.coordTemplateReaderPath := this.rootDir "\lib\coord_template_reader.py"
+        this.coordTemplateDir := this.rootDir "\assets\coord_templates"
         this.outputDir := this.rootDir "\logs"
+    }
+
+    HasCoordTemplates() {
+        templateDir := this.coordTemplateDir
+        if !DirExist(templateDir)
+            return false
+        if !FileExist(templateDir "\colon.png")
+            return false
+        loop 10 {
+            if FileExist(templateDir "\" (A_Index - 1) ".png")
+                return true
+        }
+        return false
+    }
+
+    ReadCoordByTemplate(hwnd, region) {
+        result := {ok: false, text: "", error: "", raw: "", reason: ""}
+        if !hwnd || !WinExist("ahk_id " hwnd) {
+            result.error := "绑定窗口不存在"
+            result.reason := "WINDOW_NOT_FOUND"
+            return result
+        }
+        if (!region || !IsObject(region)) {
+            result.error := "区域无效"
+            result.reason := "INVALID_REGION"
+            return result
+        }
+        if !this.HasCoordTemplates() {
+            result.error := "坐标模板不存在，请先运行模板截取工具"
+            result.reason := "NO_TEMPLATES"
+            return result
+        }
+
+        rect := this.ResolveScreenRect(hwnd, region)
+        if !rect {
+            result.error := "区域超出窗口范围"
+            result.reason := "OUT_OF_BOUNDS"
+            return result
+        }
+
+        outputPath := this.BuildOutputPath()
+        cmd := this.QuoteArg(this.rapidPythonPath)
+            . " " this.QuoteArg(this.coordTemplateReaderPath)
+            . " --x " rect.x
+            . " --y " rect.y
+            . " --width " rect.width
+            . " --height " rect.height
+            . " --output-path " this.QuoteArg(outputPath)
+
+        try {
+            raw := this.RunCommand(cmd, outputPath)
+            this.LogInfo("模板匹配坐标", "原始输出长度=" StrLen(raw) " 前200字符=" SubStr(raw, 1, 200))
+            parsed := this.ParseOutput(raw)
+            result.raw := raw
+            result.text := parsed.text
+            result.ok := (parsed.status = "OK")
+            result.error := parsed.error
+            if !result.ok {
+                result.reason := "TEMPLATE_ERROR"
+            } else if (Trim(parsed.text) = "") {
+                result.reason := "NO_TEXT"
+            } else {
+                result.reason := "TEXT_ONLY"
+            }
+        } catch as err {
+            result.error := err.Message
+            result.reason := "EXEC_ERROR"
+        } finally {
+            try if FileExist(outputPath)
+                FileDelete(outputPath)
+        }
+
+        if result.ok {
+            if (result.reason = "NO_TEXT")
+                this.LogWarn("模板匹配坐标", "成功但未匹配到坐标")
+            else
+                this.LogInfo("模板匹配坐标", "成功: " result.text)
+        } else {
+            this.LogWarn("模板匹配坐标", "失败: " result.error)
+        }
+        return result
     }
 
     ResolveDefaultRootDir() {
@@ -18,7 +101,7 @@ class TextRecognizer {
         return A_ScriptDir
     }
 
-    Recognize(hwnd, region, targetText := "", logLabel := "") {
+    Recognize(hwnd, region, targetText := "", logLabel := "", preprocess := false) {
         result := {ok: false, matched: false, text: "", error: "", raw: "", reason: ""}
         if !hwnd || !WinExist("ahk_id " hwnd) {
             result.error := "绑定窗口不存在"
@@ -48,11 +131,14 @@ class TextRecognizer {
             return result
         }
 
+        this.LogInfo(logLabel, "截屏区域: 屏幕=(" rect.x "," rect.y ") 尺寸=" rect.width "x" rect.height " 预处理=" preprocess)
+
         outputPath := this.BuildOutputPath()
-        cmd := this.BuildCommand(rect.x, rect.y, rect.width, rect.height, outputPath)
+        cmd := this.BuildCommand(rect.x, rect.y, rect.width, rect.height, outputPath, preprocess)
 
         try {
             raw := this.RunCommand(cmd, outputPath)
+            this.LogInfo(logLabel, "原始输出长度=" StrLen(raw) " 前200字符=" SubStr(raw, 1, 200))
             parsed := this.ParseOutput(raw)
             result.raw := raw
             result.text := parsed.text
@@ -89,6 +175,7 @@ class TextRecognizer {
 
     ResolveScreenRect(hwnd, region) {
         WinGetClientPos(&cx, &cy, &cw, &ch, "ahk_id " hwnd)
+        this.LogInfo("坐标转换", "客户区原点=(" cx "," cy ") 尺寸=" cw "x" ch " 区域原始=(" region.x1 "," region.y1 ")-(" region.x2 "," region.y2 ")")
         if (cw <= 0 || ch <= 0)
             return ""
         left := Max(Min(region.x1, region.x2), 0)
@@ -105,15 +192,18 @@ class TextRecognizer {
         }
     }
 
-    BuildCommand(x, y, width, height, outputPath) {
+    BuildCommand(x, y, width, height, outputPath, preprocess := false) {
         backend := this.ResolveBackend()
         if (backend.name = "rapidocr") {
-            return backend.command
+            cmd := backend.command
                 . " --x " x
                 . " --y " y
                 . " --width " width
                 . " --height " height
                 . " --output-path " this.QuoteArg(outputPath)
+            if preprocess
+                cmd .= " --preprocess"
+            return cmd
         }
         return backend.command
             . " -X " x
@@ -143,8 +233,14 @@ class TextRecognizer {
     RunCommand(commandLine, outputPath) {
         if IsObject(this.runner)
             return this.runner.Call(commandLine, outputPath)
-        if IsObject(this.executor)
-            return this.executor.Call(commandLine, outputPath)
+        if IsObject(this.executor) {
+            stdout := this.executor.Call(commandLine, outputPath)
+            if (stdout != "")
+                return stdout
+            if FileExist(outputPath)
+                return FileRead(outputPath, "UTF-8")
+            return ""
+        }
 
         shell := ComObject("WScript.Shell")
         exitCode := shell.Run(commandLine, 0, true)

@@ -5,6 +5,7 @@
 class FakeRunner {
     __New() {
         this.calls := []
+        this.shouldFailStep := false
     }
 
     RunScript(script, hwnd, startIndex := 1) {
@@ -13,6 +14,10 @@ class FakeRunner {
     }
 
     RunSingleStep(step, hwnd) {
+        if this.shouldFailStep {
+            this.calls.Push("single_fail:" step.id)
+            return {ok: false, stepId: step.id, reason: "PARSE_FAILED"}
+        }
         this.calls.Push("single:" step.id)
         return {ok: true, stepId: step.id}
     }
@@ -32,11 +37,12 @@ try {
     editor := ScriptEditor(Map("runner", runner))
     editor.currentScript := {
         steps: [
-            {id: "step_1", enabled: true},
-            {id: "step_2", enabled: true}
+            {id: "step_1", type: "wait", enabled: true},
+            {id: "step_2", type: "move_to_coord", enabled: true}
         ]
     }
     editor.selectedStepIndex := 2
+    editor.deps["cfg"] := {Window: {Hwnd: 987}}
     editor.currentFlow := {
         entryNodeId: "node_1",
         nodes: [
@@ -47,9 +53,15 @@ try {
     editor.RunCurrentScript()
     editor.RunFromCurrentStep()
     editor.RunCurrentStep()
+    if !editor.RunSelectedMoveToCoordStep()
+        throw Error("RunSelectedMoveToCoordStep should execute the selected navigation step")
     editor.RunCurrentFlow()
 
-    if (runner.calls.Length != 4)
+    editor.selectedStepIndex := 1
+    if editor.RunSelectedMoveToCoordStep()
+        throw Error("RunSelectedMoveToCoordStep should reject non-navigation steps")
+
+    if (runner.calls.Length != 5)
         throw Error("Execution commands should delegate to the runner")
     if (runner.calls[1] != "run:1")
         throw Error("RunCurrentScript should start from the first step")
@@ -57,8 +69,27 @@ try {
         throw Error("RunFromCurrentStep should start from the selected step")
     if (runner.calls[3] != "single:step_2")
         throw Error("RunCurrentStep should execute only the selected step")
-    if (runner.calls[4] != "flow:node_1")
+    if (runner.calls[4] != "single:step_2")
+        throw Error("RunSelectedMoveToCoordStep should delegate to RunSingleStep for the selected navigation step")
+    if (runner.calls[5] != "flow:node_1")
         throw Error("RunCurrentFlow should delegate to the runner with the flow entry node")
+
+    failingRunner := FakeRunner()
+    failingRunner.shouldFailStep := true
+    failingEditor := ScriptEditor(Map("runner", failingRunner))
+    failingEditor.currentScript := {
+        steps: [
+            {id: "step_1", type: "move_to_coord", enabled: true}
+        ]
+    }
+    failingEditor.selectedStepIndex := 1
+    failingEditor.deps["cfg"] := {Window: {Hwnd: 987}}
+    if failingEditor.RunSelectedMoveToCoordStep()
+        throw Error("RunSelectedMoveToCoordStep should return false when the runner reports a failed navigation test")
+    if !failingEditor.HasProp("lastMoveToCoordTestResult")
+        throw Error("RunSelectedMoveToCoordStep should keep the last navigation test result for failure reporting")
+    if (failingEditor.lastMoveToCoordTestResult.reason != "PARSE_FAILED")
+        throw Error("RunSelectedMoveToCoordStep should preserve the runner failure reason for the UI")
 
     FileAppend("PASS", statusPath, "UTF-8")
     ExitApp(0)

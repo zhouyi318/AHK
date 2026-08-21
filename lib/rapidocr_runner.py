@@ -77,6 +77,18 @@ def flatten_text(ocr_res) -> str:
     return "\n".join(texts)
 
 
+def preprocess_for_ocr(image):
+    """Convert game coordinate screenshot to clean black-on-white image for OCR."""
+    import cv2
+    import numpy as np
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    h, w = binary.shape[:2]
+    scaled = cv2.resize(binary, (w * 2, h * 2), interpolation=cv2.INTER_NEAREST)
+    return cv2.cvtColor(scaled, cv2.COLOR_GRAY2BGR)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--x", type=int)
@@ -85,6 +97,7 @@ def main() -> int:
     parser.add_argument("--height", type=int)
     parser.add_argument("--image-path")
     parser.add_argument("--output-path", required=True)
+    parser.add_argument("--preprocess", action="store_true", help="Apply grayscale+threshold+2x scaling for game coordinate OCR")
     args = parser.parse_args()
 
     output_path = Path(args.output_path)
@@ -98,6 +111,8 @@ def main() -> int:
             if args.width <= 0 or args.height <= 0:
                 raise ValueError("width/height must be positive")
             image = capture_region(args.x, args.y, args.width, args.height)
+        if args.preprocess:
+            image = preprocess_for_ocr(image)
         engine = get_engine()
         ocr_res, _ = engine(image)
         text = flatten_text(ocr_res)

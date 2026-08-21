@@ -24,8 +24,25 @@ class Player {
                 case "click":
                     if (step.delay > 0)
                         Sleep step.delay
-                    if !this.DoClientClick(hwnd, step.x, step.y, step.button) {
+                    if !this.DoClientClick(hwnd
+                        , step.x
+                        , step.y
+                        , step.button
+                        , step.HasProp("repeat") ? step.repeat : 1
+                        , step.HasProp("intervalMs") ? step.intervalMs : 0) {
                         this.log.Warn("回放点击失败: (" step.x "," step.y ")")
+                        return false
+                    }
+                case "mouse_action":
+                    if (step.HasProp("delay") && step.delay > 0)
+                        Sleep step.delay
+                    if !this.DoClientMouseAction(hwnd
+                        , step.x
+                        , step.y
+                        , step.HasProp("button") ? step.button : "R"
+                        , step.HasProp("action") ? step.action : "hold"
+                        , step.HasProp("holdMs") ? step.holdMs : 0) {
+                        this.log.Warn("回放鼠标动作失败: (" step.x "," step.y ")")
                         return false
                     }
                 case "wait":
@@ -52,15 +69,135 @@ class Player {
         return true
     }
 
-    ; 执行一次客户区点击
-    DoClientClick(hwnd, x, y, button) {
+    ; 执行一次或多次客户区点击
+    DoClientClick(hwnd, x, y, button, repeat := 1, intervalMs := 0) {
+        if !hwnd || !WinExist("ahk_id " hwnd) {
+            this.log.Warn("点击失败: 窗口不存在 hwnd=" hwnd)
+            return false
+        }
+        WinGetClientPos(&cx, &cy, &cw, &ch, "ahk_id " hwnd)
+        if (x < 0 || y < 0 || x >= cw || y >= ch) {
+            this.log.Warn("点击失败: 坐标越界 (" x "," y ") 客户区=" cw "x" ch)
+            return false
+        }
+        if !this.MoveCursorToClient(hwnd, x, y) {
+            this.log.Warn("点击失败: 移动光标失败 (" x "," y ")")
+            return false
+        }
+        buttonName := (button = "R") ? "Right" : "Left"
+        clickCount := repeat is Number ? Integer(repeat) : 1
+        if (clickCount < 1)
+            clickCount := 1
+        interval := intervalMs is Number ? Integer(intervalMs) : 0
+        if (interval < 0)
+            interval := 0
+        if (interval = 0) {
+            this.ControlClientClick(hwnd, x, y, buttonName, clickCount)
+            this.log.Info("点击执行: (" x "," y ") 按钮=" buttonName " 次数=" clickCount)
+            return true
+        }
+        Loop clickCount {
+            this.ControlClientClick(hwnd, x, y, buttonName, 1)
+            if (A_Index < clickCount && interval > 0)
+                Sleep interval
+        }
+        this.log.Info("点击执行: (" x "," y ") 按钮=" buttonName " 次数=" clickCount " 间隔=" interval "ms")
+        return true
+    }
+
+    ; 物理点击：激活窗口后用真实鼠标点击（游戏可能忽略后台左键消息）
+    DoPhysicalClientClick(hwnd, x, y, button, repeat := 1, intervalMs := 0) {
+        if !hwnd || !WinExist("ahk_id " hwnd) {
+            this.log.Warn("物理点击失败: 窗口不存在 hwnd=" hwnd)
+            return false
+        }
+        if !this.ResolveClientClick(hwnd, x, y, &screenX, &screenY) {
+            this.log.Warn("物理点击失败: 坐标越界 (" x "," y ")")
+            return false
+        }
+        try WinActivate("ahk_id " hwnd)
+        Sleep 50
+        MouseMove(screenX, screenY, 0)
+        buttonName := (button = "R") ? "Right" : "Left"
+        clickCount := repeat is Number ? Integer(repeat) : 1
+        if (clickCount < 1)
+            clickCount := 1
+        interval := intervalMs is Number ? Integer(intervalMs) : 0
+        if (interval < 0)
+            interval := 0
+        Loop clickCount {
+            Click(buttonName)
+            if (A_Index < clickCount && interval > 0)
+                Sleep interval
+        }
+        this.log.Info("物理点击执行: (" x "," y ") 按钮=" buttonName " 次数=" clickCount)
+        return true
+    }
+
+    DoClientMouseAction(hwnd, x, y, button, action, holdMs := 0) {
         if !hwnd || !WinExist("ahk_id " hwnd)
             return false
         WinGetClientPos(&cx, &cy, &cw, &ch, "ahk_id " hwnd)
         if (x < 0 || y < 0 || x >= cw || y >= ch)
             return false
-        buttonName := (button = "R") ? "Right" : "Left"
-        ControlClick("x" x " y" y, "ahk_id " hwnd, , buttonName, 1, "NA Pos")
+        if !this.MoveCursorToClient(hwnd, x, y)
+            return false
+
+        buttonToken := this.ResolveMouseButtonToken(button)
+        if (buttonToken = "")
+            return false
+        actionName := action = "" ? "hold" : action
+        holdTime := holdMs is Number ? Integer(holdMs) : 0
+        if (holdTime < 0)
+            holdTime := 0
+
+        switch actionName {
+            case "hold":
+                this.SendClientMouseButtonDown(hwnd, x, y, buttonToken)
+                if (holdTime > 0)
+                    Sleep holdTime
+                this.SendClientMouseButtonUp(hwnd, x, y, buttonToken)
+                return true
+            case "down":
+                this.SendClientMouseButtonDown(hwnd, x, y, buttonToken)
+                return true
+            case "up":
+                this.SendClientMouseButtonUp(hwnd, x, y, buttonToken)
+                return true
+            default:
+                return false
+        }
+    }
+
+    BeginPhysicalClientMouseHold(hwnd, x, y, button := "R") {
+        if !hwnd || !WinExist("ahk_id " hwnd)
+            return false
+        WinGetClientPos(&cx, &cy, &cw, &ch, "ahk_id " hwnd)
+        if (x < 0 || y < 0 || x >= cw || y >= ch)
+            return false
+        if !this.MoveCursorToClient(hwnd, x, y)
+            return false
+        buttonToken := this.ResolveMouseButtonToken(button)
+        if (buttonToken = "")
+            return false
+        this.SendPhysicalMouseButton(this.ResolveMouseButtonSendName(buttonToken), "down")
+        return true
+    }
+
+    UpdatePhysicalClientMouseHold(hwnd, x, y) {
+        if !hwnd || !WinExist("ahk_id " hwnd)
+            return false
+        WinGetClientPos(&cx, &cy, &cw, &ch, "ahk_id " hwnd)
+        if (x < 0 || y < 0 || x >= cw || y >= ch)
+            return false
+        return this.MoveCursorToClient(hwnd, x, y)
+    }
+
+    EndPhysicalMouseHold(button := "R") {
+        buttonToken := this.ResolveMouseButtonToken(button)
+        if (buttonToken = "")
+            return false
+        this.SendPhysicalMouseButton(this.ResolveMouseButtonSendName(buttonToken), "up")
         return true
     }
 
@@ -186,6 +323,13 @@ class Player {
         return "屏幕(" screenX "," screenY ")"
     }
 
+    MoveCursorToClient(hwnd, x, y) {
+        if !this.ResolveClientClick(hwnd, x, y, &screenX, &screenY)
+            return false
+        MouseMove(screenX, screenY, 0)
+        return true
+    }
+
     HasNumericCoords(x, y) {
         return (x is Number) && (y is Number)
     }
@@ -202,5 +346,71 @@ class Player {
 
     SimText(simValue) {
         return Format("{:.2f}", simValue)
+    }
+
+    ResolveMouseButtonToken(button) {
+        switch button {
+            case "R", "Right":
+                return "Right"
+            case "M", "Middle":
+                return "Middle"
+            case "L", "Left", "":
+                return "Left"
+            default:
+                return ""
+        }
+    }
+
+    ResolveMouseButtonSendName(buttonToken) {
+        switch buttonToken {
+            case "Right":
+                return "RButton"
+            case "Middle":
+                return "MButton"
+            case "Left":
+                return "LButton"
+            default:
+                return ""
+        }
+    }
+
+    SendPhysicalMouseButton(buttonToken, action) {
+        if (buttonToken = "")
+            return
+        actionName := StrLower(action)
+        SendEvent("{" buttonToken " " actionName "}")
+    }
+
+    SendClientMouseButtonDown(hwnd, x, y, buttonToken) {
+        msg := 0x0201
+        wParam := 0x0001
+        switch buttonToken {
+            case "Right":
+                msg := 0x0204
+                wParam := 0x0002
+            case "Middle":
+                msg := 0x0207
+                wParam := 0x0010
+        }
+        PostMessage(msg, wParam, this.MakeClientLParam(x, y), , "ahk_id " hwnd)
+    }
+
+    SendClientMouseButtonUp(hwnd, x, y, buttonToken) {
+        msg := 0x0202
+        switch buttonToken {
+            case "Right":
+                msg := 0x0205
+            case "Middle":
+                msg := 0x0208
+        }
+        PostMessage(msg, 0, this.MakeClientLParam(x, y), , "ahk_id " hwnd)
+    }
+
+    MakeClientLParam(x, y) {
+        return ((y & 0xFFFF) << 16) | (x & 0xFFFF)
+    }
+
+    ControlClientClick(hwnd, x, y, buttonName, clickCount := 1) {
+        ControlClick("x" x " y" y, "ahk_id " hwnd, , buttonName, clickCount, "NA Pos")
     }
 }

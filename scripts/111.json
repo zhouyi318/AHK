@@ -1,1 +1,0 @@
-﻿{"enabled":1,"id":"script_111","metadata":{"notes":"","targetMapImage":"","targetMapRegion":""},"name":"111","steps":[{"enabled":1,"id":"step_88351265","name":"点击","onFailure":{"action":"stop"},"onSuccess":{"action":"next"},"params":{"button":"L","delay":0,"x":0,"y":0},"type":"click"}],"type":"enter_map"}

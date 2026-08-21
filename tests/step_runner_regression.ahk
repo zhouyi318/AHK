@@ -24,9 +24,13 @@ class FakeExecutor {
     }
 }
 
+InvokeFakeExecutor(executor, owner, step, hwnd) {
+    return executor.Call(step, hwnd)
+}
+
 try {
     executor := FakeExecutor()
-    runner := StepRunner("", "", "", executor.Call.Bind(executor))
+    runner := StepRunner("", "", "", InvokeFakeExecutor.Bind(executor))
 
     script := {
         steps: [
@@ -56,8 +60,8 @@ try {
         throw Error("RunScript should report the failed step id")
 
     singleResult := runner.RunSingleStep(script.steps[2], 123)
-    if !singleResult.ok
-        throw Error("RunSingleStep should return executor result")
+    if singleResult.ok
+        throw Error("RunSingleStep should surface executor failure for the current step")
     if (singleResult.stepId != "step_2")
         throw Error("RunSingleStep should report the current step id")
     if (singleResult.nextAction.action != "jump")
