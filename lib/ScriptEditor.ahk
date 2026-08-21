@@ -83,7 +83,7 @@ class ScriptEditor {
         this.btnRunBot := guiObj.Add("Button", Format("x{} y{} w{} h30", pageX + 32, pageY + 90, 132), "开始/停止挂机")
         this.btnPickWindow := guiObj.Add("Button", Format("x{} y{} w{} h30", pageX + 180, pageY + 90, 132), "选择窗口")
         this.txtHomeWindowCard := guiObj.Add("Text", Format("x{} y{} w{} h{} Border", pageX + 392, pageY + 48, 420, 122), "窗口绑定`n当前绑定窗口信息会显示在右侧状态栏。")
-        this.txtHomeTaskCard := guiObj.Add("Text", Format("x{} y{} w{} h{} Border", pageX + 16, pageY + 186, 360, 150), "当前任务`n脚本编辑用于单脚本配置，流程调度用于串联多脚本。")
+        this.txtHomeTaskCard := guiObj.Add("Text", Format("x{} y{} w{} h{} Border", pageX + 16, pageY + 186, 360, 150), "运行信息`n开始挂机后这里显示当前状态、执行脚本与失败冷却。")
         this.txtHomeToolsCard := guiObj.Add("Text", Format("x{} y{} w{} h{} Border", pageX + 392, pageY + 186, 420, 150), "快捷工具`n保留 OCR 与找图测试入口，便于不进编辑页也能快速验证。")
         this.btnTestRegionFind := guiObj.Add("Button", Format("x{} y{} w{} h28", pageX + 416, pageY + 230, 120), "测试区域找图")
         this.btnTestRegionOcr := guiObj.Add("Button", Format("x{} y{} w{} h28", pageX + 548, pageY + 230, 120), "测试区域 OCR")
@@ -143,9 +143,47 @@ class ScriptEditor {
 
         this.pageSettings := guiObj.Add("Text", Format("x{} y{} w{} h{} Border", pageX, pageY, pageW, pageH), "")
         this.lblSettingsTitle := guiObj.Add("Text", Format("x{} y{} w{} h24 +0x200", pageX + 16, pageY + 12, pageW - 32), "挂机设置")
-        this.txtSettingsBase := guiObj.Add("Text", Format("x{} y{} w{} h{} Border", pageX + 16, pageY + 48, 380, 160), "基础运行`n启动/暂停热键、急停热键、主循环间隔等设置继续沿用现有配置。")
-        this.txtSettingsRecognition := guiObj.Add("Text", Format("x{} y{} w{} h{} Border", pageX + 412, pageY + 48, 400, 160), "识别参数`n全局找图相似度、OCR 调试入口与图片区域管理后续在这里继续收拢。")
-        this.txtSettingsFallback := guiObj.Add("Text", Format("x{} y{} w{} h{} Border", pageX + 16, pageY + 224, 796, 160), "异常处理`n掉线、死亡、回城石等兜底逻辑继续使用现有运行器实现，本次先完成侧栏壳子与页面承接。")
+        
+        ; ---- 基础运行 ----
+        sX := pageX + 16
+        sY := pageY + 48
+        this.grpSettingsBasic := guiObj.Add("GroupBox", Format("x{} y{} w380 h190", sX, sY), "基础运行")
+        this.lblSettingsTickMs := guiObj.Add("Text", Format("x{} y{} w230 h24 +0x200", sX + 20, sY + 36), "主循环间隔（毫秒）")
+        this.edtSettingsTickMs := guiObj.Add("Edit", Format("x{} y{} w100 h26 Right", sX + 260, sY + 34), "500")
+        this.lblSettingsAutoFightRetry := guiObj.Add("Text", Format("x{} y{} w230 h24 +0x200", sX + 20, sY + 74), "挂机开启失败重试次数")
+        this.edtSettingsAutoFightRetry := guiObj.Add("Edit", Format("x{} y{} w100 h26 Right", sX + 260, sY + 72), "3")
+        this.lblSettingsStoreIntervalMin := guiObj.Add("Text", Format("x{} y{} w230 h24 +0x200", sX + 20, sY + 112), "定时存仓间隔（分钟，0 表示不存仓）")
+        this.edtSettingsStoreIntervalMin := guiObj.Add("Edit", Format("x{} y{} w100 h26 Right", sX + 260, sY + 110), "60")
+        this.lblSettingsMonitorInterval := guiObj.Add("Text", Format("x{} y{} w230 h24 +0x200", sX + 20, sY + 150), "挂机监测找图间隔（毫秒）")
+        this.edtSettingsMonitorInterval := guiObj.Add("Edit", Format("x{} y{} w100 h26 Right", sX + 260, sY + 148), "10000")
+        
+        ; ---- 识别参数 ----
+        rX := pageX + 412
+        this.grpSettingsRecog := guiObj.Add("GroupBox", Format("x{} y{} w396 h190", rX, sY), "识别参数")
+        this.lblSettingsSim := guiObj.Add("Text", Format("x{} y{} w230 h24 +0x200", rX + 20, sY + 36), "找图相似度（0.10~1.00）")
+        this.edtSettingsSim := guiObj.Add("Edit", Format("x{} y{} w100 h26 Right", rX + 260, sY + 34), "0.85")
+        this.txtSettingsSimHint := guiObj.Add("Text", Format("x{} y{} w344 h96", rX + 20, sY + 78), "值越高越严格：找图误报多则调高，找不到图则调低。保存后立即对后续找图生效，无需重启。")
+        
+        ; ---- 进图可靠性 ----
+        bY := sY + 206
+        this.grpSettingsReliability := guiObj.Add("GroupBox", Format("x{} y{} w796 h258", sX, bY), "进图可靠性（死亡回城重新进图的兑底策略）")
+        this.lblSettingsVerifyMapRetry := guiObj.Add("Text", Format("x{} y{} w240 h24 +0x200", sX + 20, bY + 36), "地图校验重试次数")
+        this.edtSettingsVerifyMapRetry := guiObj.Add("Edit", Format("x{} y{} w110 h26 Right", sX + 270, bY + 34), "5")
+        this.lblSettingsVerifyMapInterval := guiObj.Add("Text", Format("x{} y{} w240 h24 +0x200", sX + 20, bY + 84), "地图校验重试间隔（毫秒）")
+        this.edtSettingsVerifyMapInterval := guiObj.Add("Edit", Format("x{} y{} w110 h26 Right", sX + 270, bY + 82), "2000")
+        this.lblSettingsCheckTownTimeout := guiObj.Add("Text", Format("x{} y{} w240 h24 +0x200", sX + 20, bY + 132), "等待回土城超时（毫秒）")
+        this.edtSettingsCheckTownTimeout := guiObj.Add("Edit", Format("x{} y{} w110 h26 Right", sX + 270, bY + 130), "60000")
+        this.lblSettingsScriptMaxFails := guiObj.Add("Text", Format("x{} y{} w240 h24 +0x200", sX + 420, bY + 36), "脚本连续失败进入冷却的次数")
+        this.edtSettingsScriptMaxFails := guiObj.Add("Edit", Format("x{} y{} w110 h26 Right", sX + 670, bY + 34), "3")
+        this.lblSettingsScriptCooldown := guiObj.Add("Text", Format("x{} y{} w240 h24 +0x200", sX + 420, bY + 84), "失败脚本冷却时长（毫秒）")
+        this.edtSettingsScriptCooldown := guiObj.Add("Edit", Format("x{} y{} w110 h26 Right", sX + 670, bY + 82), "600000")
+        this.txtSettingsReliabilityHint := guiObj.Add("Text", Format("x{} y{} w740 h64", sX + 20, bY + 184), "说明：进图脚本失败会自动轮换下一个；连续失败达到次数后进入冷却跳过，冷却结束自动恢复尝试。地图校验重试用于防止进图加载慢被误判回城。")
+        
+        ; ---- 保存/恢复 ----
+        aY := sY + 480
+        this.btnSaveSettings := guiObj.Add("Button", Format("x{} y{} w110 h32", sX, aY), "保存设置")
+        this.btnResetSettings := guiObj.Add("Button", Format("x{} y{} w110 h32", sX + 122, aY), "恢复默认")
+        this.txtSettingsSaveHint := guiObj.Add("Text", Format("x{} y{} w520 h24 +0x200", sX + 250, aY + 6), "")
 
         this.pageLogs := guiObj.Add("Text", Format("x{} y{} w{} h{} Border", pageX, pageY, pageW, pageH), "")
         this.lblLogsTitle := guiObj.Add("Text", Format("x{} y{} w{} h24 +0x200", pageX + 16, pageY + 12, pageW - 32), "运行日志")
@@ -197,6 +235,8 @@ class ScriptEditor {
         this.btnNavFlows.OnEvent("Click", ObjBindMethod(this, "HandleNavClick", "流程调度"))
         this.btnNavSettings.OnEvent("Click", ObjBindMethod(this, "HandleNavClick", "挂机设置"))
         this.btnNavLogs.OnEvent("Click", ObjBindMethod(this, "HandleNavClick", "运行日志"))
+        this.btnSaveSettings.OnEvent("Click", ObjBindMethod(this, "HandleSaveSettings"))
+        this.btnResetSettings.OnEvent("Click", ObjBindMethod(this, "HandleResetSettings"))
 
         this.BindOptionalClick(this.btnPickWindow, "onPickWindow")
         this.BindOptionalClick(this.btnRunBot, "onRunBot")
@@ -225,7 +265,14 @@ class ScriptEditor {
             "lblFlowMaxLoops", "edtFlowNodeMaxLoops", "btnApplyFlowNode"
         ]
         this.settingsPageControls := [
-            "pageSettings", "lblSettingsTitle", "txtSettingsBase", "txtSettingsRecognition", "txtSettingsFallback"
+            "pageSettings", "lblSettingsTitle",
+            "grpSettingsBasic", "lblSettingsTickMs", "edtSettingsTickMs", "lblSettingsAutoFightRetry", "edtSettingsAutoFightRetry",
+            "lblSettingsStoreIntervalMin", "edtSettingsStoreIntervalMin", "lblSettingsMonitorInterval", "edtSettingsMonitorInterval",
+            "grpSettingsRecog", "lblSettingsSim", "edtSettingsSim", "txtSettingsSimHint",
+            "grpSettingsReliability", "lblSettingsVerifyMapRetry", "edtSettingsVerifyMapRetry", "lblSettingsVerifyMapInterval", "edtSettingsVerifyMapInterval",
+            "lblSettingsCheckTownTimeout", "edtSettingsCheckTownTimeout", "lblSettingsScriptMaxFails", "edtSettingsScriptMaxFails",
+            "lblSettingsScriptCooldown", "edtSettingsScriptCooldown", "txtSettingsReliabilityHint",
+            "btnSaveSettings", "btnResetSettings", "txtSettingsSaveHint"
         ]
         this.logPageControls := [
             "pageLogs", "lblLogsTitle", "txtLogsHint", "edtRunLogs"
@@ -256,6 +303,8 @@ class ScriptEditor {
             this.RefreshProps()
         else if (pageName = "流程调度")
             this.RefreshFlowNodeEditor()
+        else if (pageName = "挂机设置")
+            this.LoadSettingsIntoControls()
         this.EnforcePageVisibility()
         return true
     }
@@ -738,6 +787,106 @@ class ScriptEditor {
         this.botRunStateText := text
         if !this.mouseRecording
             this.SetRunState(text)
+    }
+
+    ; 主页运行信息卡：状态/当前脚本/失败计数/冷却
+    SetBotOverview(text) {
+        this.botOverviewText := text
+        if this.HasProp("txtHomeTaskCard")
+            this.txtHomeTaskCard.Text := text
+    }
+
+    ; 从配置读值填入设置页输入框（进入页面与保存后刷新）
+    LoadSettingsIntoControls() {
+        if !this.deps.Has("cfg")
+            return
+        cfg := this.deps["cfg"]
+        this.edtSettingsTickMs.Value := String(this.ReadBotSettingNumber(cfg, "TickMs", 500))
+        this.edtSettingsAutoFightRetry.Value := String(this.ReadBotSettingNumber(cfg, "AutoFightRetry", 3))
+        this.edtSettingsStoreIntervalMin.Value := String(this.ReadBotSettingNumber(cfg, "StoreIntervalMin", 60))
+        this.edtSettingsMonitorInterval.Value := String(this.ReadBotSettingNumber(cfg, "MonitorIntervalMs", 10000))
+        this.edtSettingsSim.Value := Format("{:.2f}", this.ReadBotSettingNumber(cfg, "Sim", 0.75))
+        this.edtSettingsVerifyMapRetry.Value := String(this.ReadBotSettingNumber(cfg, "VerifyMapRetry", 5))
+        this.edtSettingsVerifyMapInterval.Value := String(this.ReadBotSettingNumber(cfg, "VerifyMapRetryIntervalMs", 2000))
+        this.edtSettingsCheckTownTimeout.Value := String(this.ReadBotSettingNumber(cfg, "CheckTownTimeoutMs", 60000))
+        this.edtSettingsScriptMaxFails.Value := String(this.ReadBotSettingNumber(cfg, "ScriptMaxConsecutiveFails", 3))
+        this.edtSettingsScriptCooldown.Value := String(this.ReadBotSettingNumber(cfg, "ScriptFailCooldownMs", 600000))
+    }
+
+    HandleSaveSettings(*) {
+        if !this.deps.Has("cfg") {
+            this.ShowSettingsSaveHint("配置不可用，无法保存")
+            return
+        }
+        values := {
+            TickMs: this.ParseSettingsNumber(this.edtSettingsTickMs.Value, 100, 5000, 500),
+            AutoFightRetry: this.ParseSettingsNumber(this.edtSettingsAutoFightRetry.Value, 1, 10, 3),
+            StoreIntervalMin: this.ParseSettingsNumber(this.edtSettingsStoreIntervalMin.Value, 0, 1440, 60),
+            MonitorIntervalMs: this.ParseSettingsNumber(this.edtSettingsMonitorInterval.Value, 1000, 600000, 10000),
+            Sim: this.ParseSettingsNumber(this.edtSettingsSim.Value, 0.10, 1.00, 0.75, true),
+            VerifyMapRetry: this.ParseSettingsNumber(this.edtSettingsVerifyMapRetry.Value, 1, 20, 5),
+            VerifyMapRetryIntervalMs: this.ParseSettingsNumber(this.edtSettingsVerifyMapInterval.Value, 0, 30000, 2000),
+            CheckTownTimeoutMs: this.ParseSettingsNumber(this.edtSettingsCheckTownTimeout.Value, 5000, 600000, 60000),
+            ScriptMaxConsecutiveFails: this.ParseSettingsNumber(this.edtSettingsScriptMaxFails.Value, 1, 10, 3),
+            ScriptFailCooldownMs: this.ParseSettingsNumber(this.edtSettingsScriptCooldown.Value, 0, 3600000, 600000)
+        }
+        if !this.deps["cfg"].SaveBotSettings(values) {
+            this.ShowSettingsSaveHint("保存失败，请检查输入")
+            return
+        }
+        this.LoadSettingsIntoControls()
+        this.ShowSettingsSaveHint("已保存到 config.ini，立即生效")
+        if this.deps.Has("logger") {
+            logger := this.deps["logger"]
+            if IsObject(logger)
+                logger.Info("挂机设置已保存: 相似度=" Format("{:.2f}", values.Sim) " 校验重试=" values.VerifyMapRetry " 土城超时=" values.CheckTownTimeoutMs "ms")
+        }
+    }
+
+    HandleResetSettings(*) {
+        this.edtSettingsTickMs.Value := "500"
+        this.edtSettingsAutoFightRetry.Value := "3"
+        this.edtSettingsStoreIntervalMin.Value := "60"
+        this.edtSettingsMonitorInterval.Value := "10000"
+        this.edtSettingsSim.Value := "0.75"
+        this.edtSettingsVerifyMapRetry.Value := "5"
+        this.edtSettingsVerifyMapInterval.Value := "2000"
+        this.edtSettingsCheckTownTimeout.Value := "60000"
+        this.edtSettingsScriptMaxFails.Value := "3"
+        this.edtSettingsScriptCooldown.Value := "600000"
+        this.ShowSettingsSaveHint("已填入默认值，点击「保存设置」后生效")
+    }
+
+    ; 解析输入框数值：非法/越界时钳制到范围内
+    ParseSettingsNumber(text, minValue, maxValue, fallback, isFloat := false) {
+        trimmed := Trim(text)
+        value := fallback
+        if (trimmed != "") {
+            try {
+                value := isFloat ? Float(trimmed) : Integer(trimmed)
+            } catch {
+                value := fallback
+            }
+        }
+        if (value < minValue)
+            value := minValue
+        if (value > maxValue)
+            value := maxValue
+        return value
+    }
+
+    ReadBotSettingNumber(cfg, key, fallback) {
+        try {
+            if (IsObject(cfg.Bot) && cfg.Bot.HasProp(key) && cfg.Bot.%key% is Number)
+                return cfg.Bot.%key%
+        } catch {
+        }
+        return fallback
+    }
+
+    ShowSettingsSaveHint(text) {
+        if this.HasProp("txtSettingsSaveHint")
+            this.txtSettingsSaveHint.Text := text
     }
 
     SetRunState(text) {

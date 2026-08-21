@@ -1,6 +1,15 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
 
+; 游戏若以管理员权限运行，非管理员的 AHK 物理点击会被 UIPI 拦截。
+; 未提权时自动以管理员身份重启本脚本。
+if !A_IsAdmin {
+    try {
+        Run('"' A_AhkPath '" "' A_ScriptFullPath '"', A_ScriptDir, "Verb RunAs")
+        ExitApp
+    }
+}
+
 ; ====================================================================
 ; 传奇私服挂机脚本 - 可视化 GUI 主界面（AutoHotkey v2）
 ; --------------------------------------------------------------------
@@ -294,9 +303,16 @@ HotkeyEmergencyStop(*) {
     StopBot()
 }
 
-; 定时刷新运行界面：状态文本、按钮文案、日志窗口
+; 定时刷新运行界面：状态文本、按钮文案、主页运行信息、日志窗口
 SyncRunUI() {
     scriptEditorWorkspace.SetBotRunState("当前状态：" . StateText(botRunner.state))
+    overview := botRunner.GetRunOverview()
+    overviewText := "运行信息"
+        . "`n状态: " StateText(overview.state)
+        . "`n当前脚本: " (overview.scriptName = "" ? "(无)" : overview.scriptName)
+        . "`n失败计数: " (overview.failText = "" ? "无" : overview.failText)
+        . "`n冷却中: " (overview.coolText = "" ? "无" : overview.coolText)
+    scriptEditorWorkspace.SetBotOverview(overviewText)
     if scriptEditorWorkspace.HasProp("btnRunBot")
         scriptEditorWorkspace.btnRunBot.Text := botRunner.IsRunning() ? "停止挂机" : "开始挂机"
     RefreshLog()

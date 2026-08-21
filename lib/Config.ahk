@@ -38,6 +38,11 @@ class Config {
         this.Bot.AutoFightRetry := Integer(IniRead(iniPath, "Bot", "AutoFightRetry", "3"))
         this.Bot.StoreIntervalMin := Integer(IniRead(iniPath, "Bot", "StoreIntervalMin", "60"))
         this.Bot.MonitorIntervalMs := Integer(IniRead(iniPath, "Bot", "MonitorIntervalMs", "10000"))
+        this.Bot.VerifyMapRetry := Integer(IniRead(iniPath, "Bot", "VerifyMapRetry", "5"))
+        this.Bot.VerifyMapRetryIntervalMs := Integer(IniRead(iniPath, "Bot", "VerifyMapRetryIntervalMs", "2000"))
+        this.Bot.CheckTownTimeoutMs := Integer(IniRead(iniPath, "Bot", "CheckTownTimeoutMs", "60000"))
+        this.Bot.ScriptMaxConsecutiveFails := Integer(IniRead(iniPath, "Bot", "ScriptMaxConsecutiveFails", "3"))
+        this.Bot.ScriptFailCooldownMs := Integer(IniRead(iniPath, "Bot", "ScriptFailCooldownMs", "600000"))
 
         this.Paths := {}
         this.Paths.AssetsDir := IniRead(iniPath, "Paths", "AssetsDir", "assets")
@@ -79,6 +84,30 @@ class Config {
         simValue := this.NormalizeSim(sim)
         this.WriteSectionValues("Bot", Map("Sim", simValue))
         this.Bot.Sim := Float(simValue)
+    }
+
+    ; 批量保存 [Bot] 节挂机参数（写入 ini 并刷新内存，立即生效）
+    SaveBotSettings(values) {
+        intKeys := [
+            "TickMs", "AutoFightRetry", "StoreIntervalMin", "MonitorIntervalMs",
+            "VerifyMapRetry", "VerifyMapRetryIntervalMs", "CheckTownTimeoutMs",
+            "ScriptMaxConsecutiveFails", "ScriptFailCooldownMs"
+        ]
+        entries := Map()
+        if IsObject(values) {
+            for _, key in intKeys {
+                if (values.HasProp(key) && values.%key% is Number)
+                    entries[key] := Integer(values.%key%)
+            }
+            if (values.HasProp("Sim") && values.Sim is Number)
+                entries["Sim"] := this.NormalizeSim(values.Sim)
+        }
+        if (entries.Count = 0)
+            return false
+        this.WriteSectionValues("Bot", entries)
+        for key, value in entries
+            this.Bot.%key% := (key = "Sim") ? Float(value) : value
+        return true
     }
 
     SaveNamedOcrRegion(name, region) {

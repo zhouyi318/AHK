@@ -256,6 +256,8 @@ def main() -> int:
     parser.add_argument("--height", type=int, required=True)
     parser.add_argument("--output-path", required=True)
     parser.add_argument("--min-score", type=float, default=0.3)
+    parser.add_argument("--save-capture-on-empty", action="store_true",
+                        help="Save the captured region to logs/coord_debug_capture.png when no coordinate is matched")
     args = parser.parse_args()
     output_path = Path(args.output_path)
 
@@ -270,6 +272,15 @@ def main() -> int:
 
         text = read_coordinates(screenshot, templates)
         print(f"Result: '{text}'")
+
+        if not text and args.save_capture_on_empty:
+            try:
+                import cv2
+                debug_path = ROOT_DIR / "logs" / "coord_debug_capture.png"
+                cv2.imwrite(str(debug_path), screenshot)
+                print(f"Debug capture saved: {debug_path}")
+            except Exception as save_exc:
+                print(f"Failed to save debug capture: {save_exc}")
 
         if text:
             write_result(output_path, "OK", text=text)

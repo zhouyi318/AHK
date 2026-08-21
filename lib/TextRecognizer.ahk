@@ -60,6 +60,7 @@ class TextRecognizer {
             . " --width " rect.width
             . " --height " rect.height
             . " --output-path " this.QuoteArg(outputPath)
+            . " --save-capture-on-empty"
 
         try {
             raw := this.RunCommand(cmd, outputPath)

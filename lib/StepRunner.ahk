@@ -65,19 +65,23 @@ class StepRunner {
                 return true
             case "click":
                 ; 游戏忽略后台左键消息，使用物理点击（激活窗口+真实鼠标）
+                ; 顺序：移动鼠标到坐标 -> 延迟 delay（录制时与上一步的间隔）-> 点击 repeat 次
                 return this.player.DoPhysicalClientClick(hwnd
                     , params.HasProp("x") ? params.x : 0
                     , params.HasProp("y") ? params.y : 0
                     , params.HasProp("button") ? params.button : "L"
                     , params.HasProp("repeat") ? params.repeat : 1
-                    , params.HasProp("intervalMs") ? params.intervalMs : 0)
+                    , params.HasProp("intervalMs") ? params.intervalMs : 0
+                    , params.HasProp("delay") ? params.delay : 0)
             case "mouse_action":
+                ; 顺序：移动鼠标到坐标 -> 延迟 delay -> 执行按住动作
                 return this.player.DoClientMouseAction(hwnd
                     , params.HasProp("x") ? params.x : 0
                     , params.HasProp("y") ? params.y : 0
                     , params.HasProp("button") ? params.button : "R"
                     , params.HasProp("action") ? params.action : "hold"
-                    , params.HasProp("holdMs") ? params.holdMs : 0)
+                    , params.HasProp("holdMs") ? params.holdMs : 0
+                    , params.HasProp("delay") ? params.delay : 0)
             case "find_image":
                 return this.player.FindPic(
                     params.HasProp("image") ? params.image : "",
